@@ -229,11 +229,13 @@
       const getDayData = (date) => {
         if (!schedules[date]) {
           const allBenchIds = benches.map(b => b.id);
+          // Default to 2 shifts with both shift 1 and shift 2 initialized
           return {
-            shiftCount: 1,
+            shiftCount: 2,
             isOT: false,
             shifts: {
-              "1": { benchTeams: {}, inactiveBenches: allBenchIds }
+              "1": { benchTeams: {}, inactiveBenches: allBenchIds },
+              "2": { benchTeams: {}, inactiveBenches: allBenchIds }
             }
           };
         }
