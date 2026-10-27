@@ -77,6 +77,8 @@
       const [activeShift, setActiveShift] = useState("1");
       
       const [newEmployeeName, setNewEmployeeName] = useState('');
+      const [newEmployeeClockNum, setNewEmployeeClockNum] = useState('');
+      const [newEmployeeSeniority, setNewEmployeeSeniority] = useState('');
       const [newEmployeeShift, setNewEmployeeShift] = useState('1');
       const [newBenchName, setNewBenchName] = useState('');
       
@@ -220,8 +222,14 @@
         localStorage.setItem(`read_notes_${currentWeekKey}`, updatedNotes.length.toString());
       };
 
-      // Alphabetized views
-      const sortedEmployees = [...employees].sort((a, b) => a.name.localeCompare(b.name));
+      // Seniority-sorted views (lowest seniority number or fallback to alphabetical)
+      const sortedEmployees = [...employees].sort((a, b) => {
+        const senA = a.seniority !== undefined && a.seniority !== '' ? parseInt(a.seniority) : 99999;
+        const senB = b.seniority !== undefined && b.seniority !== '' ? parseInt(b.seniority) : 99999;
+        if (senA !== senB) return senA - senB;
+        return a.name.localeCompare(b.name);
+      });
+
       const sortedBenches = [...benches].sort((a, b) => a.name.localeCompare(b.name));
 
       const extendedEmployees = [...sortedEmployees, { id: 'not-running', name: 'Not Running', shift: activeShift, restrictedBenches: [] }];
@@ -229,7 +237,6 @@
       const getDayData = (date) => {
         if (!schedules[date]) {
           const allBenchIds = benches.map(b => b.id);
-          // Default to 2 shifts with both shift 1 and shift 2 initialized
           return {
             shiftCount: 2,
             isOT: false,
@@ -354,14 +361,25 @@
         e.preventDefault();
         if (user?.role !== 'admin' || !newEmployeeName.trim()) return;
         const empId = Date.now().toString();
-        const newEmp = { id: empId, name: newEmployeeName.trim(), shift: newEmployeeShift, restrictedBenches: [] };
+        const newEmp = { 
+          id: empId, 
+          name: newEmployeeName.trim(), 
+          clockNum: newEmployeeClockNum.trim(),
+          seniority: newEmployeeSeniority !== '' ? parseInt(newEmployeeSeniority) : 0,
+          shift: newEmployeeShift, 
+          restrictedBenches: [] 
+        };
         await db.collection('employees').doc(empId).set(newEmp);
         setNewEmployeeName('');
+        setNewEmployeeClockNum('');
+        setNewEmployeeSeniority('');
       };
 
-      const handleUpdateEmployeeShift = async (id, newShift) => {
+      const handleUpdateEmployeeField = async (id, field, value) => {
         if (user?.role !== 'admin') return;
-        await db.collection('employees').doc(id).update({ shift: newShift });
+        const updates = {};
+        updates[field] = value;
+        await db.collection('employees').doc(id).update(updates);
       };
 
       const handleDeleteEmployee = async (id, empName) => {
@@ -670,7 +688,7 @@
                         const isAbsent = (currentShiftData.absentEmployees || []).includes(emp.id);
                         return (
                           <button key={emp.id} onClick={() => user.role !== 'observer' && !scheduleLocked && handleToggleAbsence(emp.id)} disabled={user.role === 'observer' || scheduleLocked} className={`px-3.5 py-2 rounded-lg text-xs font-bold transition shadow-xs ${isAbsent ? 'bg-red-500 text-white line-through' : darkMode ? 'bg-slate-700 text-slate-200 hover:bg-slate-600' : 'bg-slate-100 text-slate-900 hover:bg-slate-200 border border-slate-300'}`}>
-                            {emp.name} {isAbsent ? '(Absent)' : ''}
+                            {emp.name} {emp.clockNum ? `(#${emp.clockNum})` : ''} {isAbsent ? '(Absent)' : ''}
                           </button>
                         );
                       })
@@ -708,7 +726,7 @@
                         </div>
 
                         {isInactive ? (
-                          <p className="text-sm font-semibold text-amber-600 dark:text-amber-500 py-6 text-center">⚠️ Bench Down / Inactive (Default)</p>
+                          <p className="text-sm font-semibold text-amber-600 dark:text-amber-500 py-6 text-center">⚠️ Bench Down / Inactive</p>
                         ) : (
                           <>
                             <div className="flex flex-wrap gap-2 mb-4 min-h-[44px]">
@@ -719,7 +737,7 @@
                                   const emp = extendedEmployees.find(e => e.id === empId);
                                   return emp ? (
                                     <span key={empId} className="inline-flex items-center px-3 py-1 rounded-lg text-sm font-bold bg-blue-50 text-blue-900 border border-blue-200 dark:bg-blue-900 dark:text-blue-100 dark:border-blue-800">
-                                      {emp.name}
+                                      {emp.name} {emp.clockNum ? `(#${emp.clockNum})` : ''}
                                       {user.role !== 'observer' && !scheduleLocked && <button onClick={() => handleRemoveEmployee(bench.id, empId)} className="ml-2 text-blue-700 hover:text-blue-900 dark:text-blue-300 font-extrabold">×</button>}
                                     </span>
                                   ) : null;
@@ -728,9 +746,9 @@
                             </div>
                             {user.role !== 'observer' && !scheduleLocked && (
                               <select className={`w-full p-2.5 border rounded-lg text-sm font-bold ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'}`} onChange={(e) => handleAssignEmployee(bench.id, e.target.value)} value="">
-                                <option value="" disabled>+ Add employee (fairness sorted)...</option>
+                                <option value="" disabled>+ Add employee...</option>
                                 {sortedAvailable.map(emp => (
-                                  <option key={emp.id} value={emp.id}>{emp.name} (Ran {stats[emp.id]?.[bench.id] || 0}x)</option>
+                                  <option key={emp.id} value={emp.id}>{emp.name} {emp.clockNum ? `(#${emp.clockNum})` : ''} (Ran {stats[emp.id]?.[bench.id] || 0}x)</option>
                                 ))}
                               </select>
                             )}
@@ -745,7 +763,7 @@
 
             {activeTab === 'analytics' && (
               <div className={`p-6 rounded-xl border shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-900'}`}>
-                <h2 className={`text-xl font-bold mb-6 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Rotation Matrix (Tap numbers for history)</h2>
+                <h2 className={`text-xl font-bold mb-6 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Rotation Matrix</h2>
                 
                 <div className="overflow-x-auto max-w-full relative">
                   <table className={`w-full text-sm text-left border-collapse ${darkMode ? 'text-slate-300' : 'text-slate-900'}`}>
@@ -759,7 +777,7 @@
                       {sortedEmployees.map(emp => (
                         <tr key={emp.id} className={`border-b transition ${darkMode ? 'border-slate-700/60 hover:bg-slate-700/20' : 'border-slate-200 hover:bg-slate-50'}`}>
                           <td className={`p-3 font-bold sticky left-0 z-10 whitespace-nowrap shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] ${darkMode ? 'bg-slate-800 text-slate-100' : 'bg-white text-slate-900'}`}>
-                            {emp.name}
+                            {emp.name} {emp.clockNum ? <span className="text-xs opacity-75 font-normal">(#{emp.clockNum})</span> : ''}
                           </td>
                           {sortedBenches.map(bench => {
                             const count = stats[emp.id]?.[bench.id] || 0;
@@ -850,9 +868,11 @@
                   <div className="space-y-6">
                     <div className={`p-5 rounded-xl border ${darkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'}`}>
                       <h3 className={`font-bold text-base mb-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Add Employee to Roster</h3>
-                      <p className={`text-xs font-semibold mb-4 ${darkMode ? 'text-slate-400' : 'text-slate-700'}`}>Operational floor workers. They do not log into the app.</p>
+                      <p className={`text-xs font-semibold mb-4 ${darkMode ? 'text-slate-400' : 'text-slate-700'}`}>Operational floor workers sorted by seniority.</p>
                       <form onSubmit={handleAddEmployee} className="flex gap-2 flex-wrap md:flex-nowrap">
                         <input type="text" placeholder="Employee Name..." value={newEmployeeName} onChange={(e) => setNewEmployeeName(e.target.value)} className={`flex-1 p-2.5 border rounded-lg text-sm font-semibold ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-400 text-slate-900'}`} />
+                        <input type="text" placeholder="Clock #..." value={newEmployeeClockNum} onChange={(e) => setNewEmployeeClockNum(e.target.value)} className={`w-28 p-2.5 border rounded-lg text-sm font-semibold ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-400 text-slate-900'}`} />
+                        <input type="number" placeholder="Seniority Rank..." value={newEmployeeSeniority} onChange={(e) => setNewEmployeeSeniority(e.target.value)} className={`w-32 p-2.5 border rounded-lg text-sm font-semibold ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-400 text-slate-900'}`} />
                         <select value={newEmployeeShift} onChange={(e) => setNewEmployeeShift(e.target.value)} className={`p-2.5 border rounded-lg text-sm font-semibold ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-400 text-slate-900'}`}>
                           <option value="1">Shift 1</option><option value="2">Shift 2</option><option value="3">Shift 3</option>
                         </select>
@@ -862,7 +882,7 @@
 
                     <div>
                       <div className="flex justify-between items-center mb-3">
-                        <h3 className={`font-bold text-base ${darkMode ? 'text-white' : 'text-slate-900'}`}>Active Roster ({employees.length} workers)</h3>
+                        <h3 className={`font-bold text-base ${darkMode ? 'text-white' : 'text-slate-900'}`}>Active Roster ({employees.length} workers sorted by seniority)</h3>
                         <button onClick={() => setEditEmployees(!editEmployees)} className={`text-xs px-3 py-1.5 rounded-lg font-bold transition shadow-xs ${editEmployees ? 'bg-amber-600 text-white' : darkMode ? 'bg-slate-700 text-slate-200 hover:bg-slate-600' : 'bg-slate-200 text-slate-900 hover:bg-slate-300 border border-slate-300'}`}>
                           {editEmployees ? '🔒 Lock Deletions' : '✏️ Enable Delete Mode'}
                         </button>
@@ -873,7 +893,7 @@
                             <div className="flex justify-between items-start">
                               <div>
                                 <p className={`font-bold text-sm ${darkMode ? 'text-white' : 'text-slate-900'}`}>{emp.name}</p>
-                                <p className={`text-xs font-semibold mt-0.5 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>ID: {emp.id}</p>
+                                <p className={`text-xs font-semibold mt-0.5 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>Clock #: {emp.clockNum || 'None'} | Seniority: {emp.seniority !== undefined ? emp.seniority : 'N/A'}</p>
                               </div>
                               <div className="flex gap-2">
                                 <button onClick={() => setSelectedEmployeeForModal(emp)} className="text-xs px-2 py-1 bg-slate-700 text-white rounded font-bold hover:bg-slate-800">Exceptions</button>
@@ -882,11 +902,33 @@
                                 )}
                               </div>
                             </div>
-                            <div className="flex items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                              <div>
+                                <label className="text-[10px] font-bold text-slate-400 block mb-0.5">Clock #</label>
+                                <input 
+                                  type="text" 
+                                  value={emp.clockNum || ''} 
+                                  onChange={(e) => handleUpdateEmployeeField(emp.id, 'clockNum', e.target.value)}
+                                  placeholder="Clock #" 
+                                  className={`w-full p-1.5 border rounded-lg text-xs font-bold ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-100 border-slate-300 text-slate-900'}`}
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-bold text-slate-400 block mb-0.5">Seniority</label>
+                                <input 
+                                  type="number" 
+                                  value={emp.seniority !== undefined ? emp.seniority : ''} 
+                                  onChange={(e) => handleUpdateEmployeeField(emp.id, 'seniority', e.target.value !== '' ? parseInt(e.target.value) : 0)}
+                                  placeholder="Rank" 
+                                  className={`w-full p-1.5 border rounded-lg text-xs font-bold ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-100 border-slate-300 text-slate-900'}`}
+                                />
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
                               <span className={`text-xs font-bold ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Shift:</span>
                               <select 
                                 value={emp.shift} 
-                                onChange={(e) => handleUpdateEmployeeShift(emp.id, e.target.value)} 
+                                onChange={(e) => handleUpdateEmployeeField(emp.id, 'shift', e.target.value)} 
                                 className={`w-full p-1.5 border rounded-lg text-xs font-bold ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-100 border-slate-300 text-slate-900'}`}
                               >
                                 <option value="1">Shift 1</option>
@@ -959,7 +1001,7 @@
                 </div>
 
                 <div className="pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
-                  <span className="text-xs text-slate-400">RotationStation v1.3</span>
+                  <span className="text-xs text-slate-400">RotationStation v1.4</span>
                   <button onClick={handleLogout} className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow transition">
                     Log Out of Account
                   </button>
