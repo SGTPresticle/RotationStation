@@ -221,7 +221,7 @@
         localStorage.setItem(`read_notes_${currentWeekKey}`, updatedNotes.length.toString());
       };
 
-      // Clock-number / Seniority-sorted views (lowest clock number first, fallback to alphabetical)
+      // Clock-number / Seniority-sorted views (lower clock number = higher seniority/first)
       const sortedEmployees = [...employees].sort((a, b) => {
         const clockA = a.clockNum !== undefined && a.clockNum !== '' ? parseInt(a.clockNum, 10) : 999999;
         const clockB = b.clockNum !== undefined && b.clockNum !== '' ? parseInt(b.clockNum, 10) : 999999;
@@ -687,7 +687,7 @@
                         const isAbsent = (currentShiftData.absentEmployees || []).includes(emp.id);
                         return (
                           <button key={emp.id} onClick={() => user.role !== 'observer' && !scheduleLocked && handleToggleAbsence(emp.id)} disabled={user.role === 'observer' || scheduleLocked} className={`px-3.5 py-2 rounded-lg text-xs font-bold transition shadow-xs ${isAbsent ? 'bg-red-500 text-white line-through' : darkMode ? 'bg-slate-700 text-slate-200 hover:bg-slate-600' : 'bg-slate-100 text-slate-900 hover:bg-slate-200 border border-slate-300'}`}>
-                            {emp.name} {emp.clockNum ? `(#${emp.clockNum})` : ''} {isAbsent ? '(Absent)' : ''}
+                            {emp.name} {isAbsent ? '(Absent)' : ''}
                           </button>
                         );
                       })
@@ -736,7 +736,7 @@
                                   const emp = extendedEmployees.find(e => e.id === empId);
                                   return emp ? (
                                     <span key={empId} className="inline-flex items-center px-3 py-1 rounded-lg text-sm font-bold bg-blue-50 text-blue-900 border border-blue-200 dark:bg-blue-900 dark:text-blue-100 dark:border-blue-800">
-                                      {emp.name} {emp.clockNum ? `(#${emp.clockNum})` : ''}
+                                      {emp.name}
                                       {user.role !== 'observer' && !scheduleLocked && <button onClick={() => handleRemoveEmployee(bench.id, empId)} className="ml-2 text-blue-700 hover:text-blue-900 dark:text-blue-300 font-extrabold">×</button>}
                                     </span>
                                   ) : null;
@@ -747,7 +747,7 @@
                               <select className={`w-full p-2.5 border rounded-lg text-sm font-bold ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'}`} onChange={(e) => handleAssignEmployee(bench.id, e.target.value)} value="">
                                 <option value="" disabled>+ Add employee...</option>
                                 {sortedAvailable.map(emp => (
-                                  <option key={emp.id} value={emp.id}>{emp.name} {emp.clockNum ? `(#${emp.clockNum})` : ''} (Ran {stats[emp.id]?.[bench.id] || 0}x)</option>
+                                  <option key={emp.id} value={emp.id}>{emp.name} (Ran {stats[emp.id]?.[bench.id] || 0}x)</option>
                                 ))}
                               </select>
                             )}
