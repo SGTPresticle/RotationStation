@@ -231,7 +231,7 @@
         return a.name.localeCompare(b.name);
       });
 
-      // Alphabetical sorting specifically for the Management Roster so typing clock #s doesn't cause cards to jump
+      // Alphabetical sorting specifically for Management Roster to prevent card jumping while typing clock numbers
       const managementSortedEmployees = [...employees].sort((a, b) => a.name.localeCompare(b.name));
 
       const sortedBenches = [...benches].sort((a, b) => a.name.localeCompare(b.name));
@@ -990,7 +990,7 @@
                 </div>
 
                 <div className="pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
-                  <span className="text-xs text-slate-400">RotationStation v1.4</span>
+                  <span className="text-xs text-slate-400">RotationStation v1.4.1</span>
                   <button onClick={handleLogout} className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow transition">
                     Log Out of Account
                   </button>
