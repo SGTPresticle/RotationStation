@@ -221,7 +221,7 @@
         localStorage.setItem(`read_notes_${currentWeekKey}`, updatedNotes.length.toString());
       };
 
-      // Clock-number / Seniority-sorted views (lower clock number = higher seniority/first)
+      // Seniority-sorted views for Schedule & Analytics (lower clock number = higher seniority/first)
       const sortedEmployees = [...employees].sort((a, b) => {
         const clockA = a.clockNum !== undefined && a.clockNum !== '' ? parseInt(a.clockNum, 10) : 999999;
         const clockB = b.clockNum !== undefined && b.clockNum !== '' ? parseInt(b.clockNum, 10) : 999999;
@@ -230,6 +230,9 @@
         }
         return a.name.localeCompare(b.name);
       });
+
+      // Alphabetical sorting specifically for the Management Roster so typing clock #s doesn't cause cards to jump
+      const managementSortedEmployees = [...employees].sort((a, b) => a.name.localeCompare(b.name));
 
       const sortedBenches = [...benches].sort((a, b) => a.name.localeCompare(b.name));
 
@@ -867,7 +870,7 @@
                   <div className="space-y-6">
                     <div className={`p-5 rounded-xl border ${darkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'}`}>
                       <h3 className={`font-bold text-base mb-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Add Employee to Roster</h3>
-                      <p className={`text-xs font-semibold mb-4 ${darkMode ? 'text-slate-400' : 'text-slate-700'}`}>Operational floor workers sorted automatically by clock number (seniority).</p>
+                      <p className={`text-xs font-semibold mb-4 ${darkMode ? 'text-slate-400' : 'text-slate-700'}`}>Operational floor workers.</p>
                       <form onSubmit={handleAddEmployee} className="flex gap-2 flex-wrap md:flex-nowrap">
                         <input type="text" placeholder="Employee Name..." value={newEmployeeName} onChange={(e) => setNewEmployeeName(e.target.value)} className={`flex-1 p-2.5 border rounded-lg text-sm font-semibold ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-400 text-slate-900'}`} />
                         <input type="text" placeholder="Clock #..." value={newEmployeeClockNum} onChange={(e) => setNewEmployeeClockNum(e.target.value)} className={`w-36 p-2.5 border rounded-lg text-sm font-semibold ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-400 text-slate-900'}`} />
@@ -880,13 +883,13 @@
 
                     <div>
                       <div className="flex justify-between items-center mb-3">
-                        <h3 className={`font-bold text-base ${darkMode ? 'text-white' : 'text-slate-900'}`}>Active Roster ({employees.length} workers sorted by seniority)</h3>
+                        <h3 className={`font-bold text-base ${darkMode ? 'text-white' : 'text-slate-900'}`}>Active Roster ({employees.length} workers)</h3>
                         <button onClick={() => setEditEmployees(!editEmployees)} className={`text-xs px-3 py-1.5 rounded-lg font-bold transition shadow-xs ${editEmployees ? 'bg-amber-600 text-white' : darkMode ? 'bg-slate-700 text-slate-200 hover:bg-slate-600' : 'bg-slate-200 text-slate-900 hover:bg-slate-300 border border-slate-300'}`}>
                           {editEmployees ? '🔒 Lock Deletions' : '✏️ Enable Delete Mode'}
                         </button>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                        {sortedEmployees.map(emp => (
+                        {managementSortedEmployees.map(emp => (
                           <div key={emp.id} className={`p-3.5 rounded-xl border flex flex-col justify-between gap-3 ${darkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-300 text-slate-900 shadow-xs'}`}>
                             <div className="flex justify-between items-start">
                               <div>
