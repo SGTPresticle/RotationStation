@@ -78,7 +78,6 @@
       
       const [newEmployeeName, setNewEmployeeName] = useState('');
       const [newEmployeeClockNum, setNewEmployeeClockNum] = useState('');
-      const [newEmployeeSeniority, setNewEmployeeSeniority] = useState('');
       const [newEmployeeShift, setNewEmployeeShift] = useState('1');
       const [newBenchName, setNewBenchName] = useState('');
       
@@ -111,14 +110,14 @@
         const savedSession = localStorage.getItem('rotation_session');
         if (savedSession) setUser(JSON.parse(savedSession));
 
-        // Real-time listener for Employees (No fake fallback auto-seeding)
+        // Real-time listener for Employees
         const unsubEmployees = db.collection('employees').onSnapshot(snapshot => {
           const list = [];
           snapshot.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
           setEmployees(list);
         });
 
-        // Real-time listener for Benches (No fake fallback auto-seeding)
+        // Real-time listener for Benches
         const unsubBenches = db.collection('benches').onSnapshot(snapshot => {
           const list = [];
           snapshot.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
@@ -222,11 +221,13 @@
         localStorage.setItem(`read_notes_${currentWeekKey}`, updatedNotes.length.toString());
       };
 
-      // Seniority-sorted views (lowest seniority number or fallback to alphabetical)
+      // Clock-number / Seniority-sorted views (lowest clock number first, fallback to alphabetical)
       const sortedEmployees = [...employees].sort((a, b) => {
-        const senA = a.seniority !== undefined && a.seniority !== '' ? parseInt(a.seniority) : 99999;
-        const senB = b.seniority !== undefined && b.seniority !== '' ? parseInt(b.seniority) : 99999;
-        if (senA !== senB) return senA - senB;
+        const clockA = a.clockNum !== undefined && a.clockNum !== '' ? parseInt(a.clockNum, 10) : 999999;
+        const clockB = b.clockNum !== undefined && b.clockNum !== '' ? parseInt(b.clockNum, 10) : 999999;
+        if (!isNaN(clockA) && !isNaN(clockB) && clockA !== clockB) {
+          return clockA - clockB;
+        }
         return a.name.localeCompare(b.name);
       });
 
@@ -365,14 +366,12 @@
           id: empId, 
           name: newEmployeeName.trim(), 
           clockNum: newEmployeeClockNum.trim(),
-          seniority: newEmployeeSeniority !== '' ? parseInt(newEmployeeSeniority) : 0,
           shift: newEmployeeShift, 
           restrictedBenches: [] 
         };
         await db.collection('employees').doc(empId).set(newEmp);
         setNewEmployeeName('');
         setNewEmployeeClockNum('');
-        setNewEmployeeSeniority('');
       };
 
       const handleUpdateEmployeeField = async (id, field, value) => {
@@ -868,11 +867,10 @@
                   <div className="space-y-6">
                     <div className={`p-5 rounded-xl border ${darkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'}`}>
                       <h3 className={`font-bold text-base mb-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Add Employee to Roster</h3>
-                      <p className={`text-xs font-semibold mb-4 ${darkMode ? 'text-slate-400' : 'text-slate-700'}`}>Operational floor workers sorted by seniority.</p>
+                      <p className={`text-xs font-semibold mb-4 ${darkMode ? 'text-slate-400' : 'text-slate-700'}`}>Operational floor workers sorted automatically by clock number (seniority).</p>
                       <form onSubmit={handleAddEmployee} className="flex gap-2 flex-wrap md:flex-nowrap">
                         <input type="text" placeholder="Employee Name..." value={newEmployeeName} onChange={(e) => setNewEmployeeName(e.target.value)} className={`flex-1 p-2.5 border rounded-lg text-sm font-semibold ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-400 text-slate-900'}`} />
-                        <input type="text" placeholder="Clock #..." value={newEmployeeClockNum} onChange={(e) => setNewEmployeeClockNum(e.target.value)} className={`w-28 p-2.5 border rounded-lg text-sm font-semibold ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-400 text-slate-900'}`} />
-                        <input type="number" placeholder="Seniority Rank..." value={newEmployeeSeniority} onChange={(e) => setNewEmployeeSeniority(e.target.value)} className={`w-32 p-2.5 border rounded-lg text-sm font-semibold ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-400 text-slate-900'}`} />
+                        <input type="text" placeholder="Clock #..." value={newEmployeeClockNum} onChange={(e) => setNewEmployeeClockNum(e.target.value)} className={`w-36 p-2.5 border rounded-lg text-sm font-semibold ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-400 text-slate-900'}`} />
                         <select value={newEmployeeShift} onChange={(e) => setNewEmployeeShift(e.target.value)} className={`p-2.5 border rounded-lg text-sm font-semibold ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-400 text-slate-900'}`}>
                           <option value="1">Shift 1</option><option value="2">Shift 2</option><option value="3">Shift 3</option>
                         </select>
@@ -893,7 +891,7 @@
                             <div className="flex justify-between items-start">
                               <div>
                                 <p className={`font-bold text-sm ${darkMode ? 'text-white' : 'text-slate-900'}`}>{emp.name}</p>
-                                <p className={`text-xs font-semibold mt-0.5 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>Clock #: {emp.clockNum || 'None'} | Seniority: {emp.seniority !== undefined ? emp.seniority : 'N/A'}</p>
+                                <p className={`text-xs font-semibold mt-0.5 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>Clock #: {emp.clockNum || 'None'}</p>
                               </div>
                               <div className="flex gap-2">
                                 <button onClick={() => setSelectedEmployeeForModal(emp)} className="text-xs px-2 py-1 bg-slate-700 text-white rounded font-bold hover:bg-slate-800">Exceptions</button>
@@ -902,27 +900,15 @@
                                 )}
                               </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
-                              <div>
-                                <label className="text-[10px] font-bold text-slate-400 block mb-0.5">Clock #</label>
-                                <input 
-                                  type="text" 
-                                  value={emp.clockNum || ''} 
-                                  onChange={(e) => handleUpdateEmployeeField(emp.id, 'clockNum', e.target.value)}
-                                  placeholder="Clock #" 
-                                  className={`w-full p-1.5 border rounded-lg text-xs font-bold ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-100 border-slate-300 text-slate-900'}`}
-                                />
-                              </div>
-                              <div>
-                                <label className="text-[10px] font-bold text-slate-400 block mb-0.5">Seniority</label>
-                                <input 
-                                  type="number" 
-                                  value={emp.seniority !== undefined ? emp.seniority : ''} 
-                                  onChange={(e) => handleUpdateEmployeeField(emp.id, 'seniority', e.target.value !== '' ? parseInt(e.target.value) : 0)}
-                                  placeholder="Rank" 
-                                  className={`w-full p-1.5 border rounded-lg text-xs font-bold ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-100 border-slate-300 text-slate-900'}`}
-                                />
-                              </div>
+                            <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
+                              <label className="text-[10px] font-bold text-slate-400 block mb-0.5">Clock # (Seniority)</label>
+                              <input 
+                                type="text" 
+                                value={emp.clockNum || ''} 
+                                onChange={(e) => handleUpdateEmployeeField(emp.id, 'clockNum', e.target.value)}
+                                placeholder="Clock #" 
+                                className={`w-full p-1.5 border rounded-lg text-xs font-bold ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-100 border-slate-300 text-slate-900'}`}
+                              />
                             </div>
                             <div className="flex items-center gap-2">
                               <span className={`text-xs font-bold ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Shift:</span>
