@@ -308,9 +308,15 @@
               )}
 
               {currentTab === 'settings' && (
-                <div className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800 text-center space-y-3">
+                <div className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800 space-y-4">
                   <h2 className="text-base font-bold text-slate-200">Application Settings</h2>
-                  <p className="text-xs text-slate-400">System configurations and database parameters.</p>
+                  <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex justify-between items-center">
+                    <div>
+                      <p className="font-bold text-sm text-slate-200">RotationStation Version</p>
+                      <p className="text-xs text-slate-400">Current active build deployed on GitHub Pages</p>
+                    </div>
+                    <span className="px-3 py-1 rounded-lg bg-purple-500/20 text-purple-300 font-mono text-xs font-bold">v1.5.0</span>
+                  </div>
                 </div>
               )}
             </main>
