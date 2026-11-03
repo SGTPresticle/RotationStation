@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RotationStation v1.5.2</title>
+  <title>RotationStation v1.5.3</title>
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- React & ReactDOM -->
@@ -38,14 +38,25 @@
         box-shadow: none !important;
       }
       #printable-analytics table {
-        font-size: 10px !important;
+        font-size: 11px !important;
         width: 100% !important;
         table-layout: fixed !important;
+        color: black !important;
       }
       #printable-analytics th, #printable-analytics td {
-        padding: 4px 6px !important;
+        padding: 5px 6px !important;
         white-space: normal !important;
         word-break: break-word !important;
+        color: black !important;
+        background: transparent !important;
+        border-color: #cbd5e1 !important;
+      }
+      #printable-analytics span {
+        color: black !important;
+        background: transparent !important;
+        border: 1px solid #94a3b8 !important;
+        padding: 2px 4px !important;
+        border-radius: 4px !important;
       }
       button, header, footer, .no-print {
         display: none !important;
@@ -584,7 +595,7 @@
           <div className={`min-h-screen flex items-center justify-center p-4 ${darkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-100 text-slate-900'}`}>
             <div className={`w-full max-w-md border rounded-xl shadow-lg p-8 ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-900'}`}>
               <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold tracking-tight">RotationStation <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono">v1.5.2</span></h1>
+                <h1 className="text-2xl font-bold tracking-tight">RotationStation <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono">v1.5.3</span></h1>
               </div>
 
               {authStep === 'login' && (
@@ -1064,12 +1075,12 @@
                       <p className={`font-bold text-sm ${darkMode ? 'text-white' : 'text-slate-900'}`}>RotationStation Build</p>
                       <p className={`text-xs font-semibold ${darkMode ? 'text-slate-400' : 'text-slate-700'}`}>Active deployment version</p>
                     </div>
-                    <span className="px-3 py-1.5 rounded-lg bg-purple-500/20 text-purple-300 font-mono text-xs font-bold">v1.5.2</span>
+                    <span className="px-3 py-1.5 rounded-lg bg-purple-500/20 text-purple-300 font-mono text-xs font-bold">v1.5.3</span>
                   </div>
                 </div>
 
                 <div className="pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
-                  <span className="text-xs text-slate-400">RotationStation v1.5.2</span>
+                  <span className="text-xs text-slate-400">RotationStation v1.5.3</span>
                   <button onClick={handleLogout} className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow transition">
                     Log Out of Account
                   </button>
