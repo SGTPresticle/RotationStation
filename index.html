@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RotationStation v1.5.0</title>
+  <title>RotationStation</title>
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- React & ReactDOM -->
@@ -12,337 +12,1094 @@
   <!-- Babel for JSX -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen selection:bg-purple-500 selection:text-white">
+<body class="overflow-x-hidden">
   <div id="root"></div>
 
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    function RotationStationApp() {
-      // App State
-      const [currentTab, setCurrentTab] = useState('schedule'); // 'schedule' | 'analytics' | 'management' | 'settings'
-      const [managementSubTab, setManagementSubTab] = useState('users'); // 'users' | 'employees' | 'benches'
-      const [darkMode, setDarkMode] = useState(true);
-      const [showNotesModal, setShowNotesModal] = useState(false);
+    // Initialize Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyCGHbFd-lw_KEwvkjVMRlkHADZL_8aCjQU",
+      authDomain: "rotationstation-b820f.firebaseapp.com",
+      projectId: "rotationstation-b820f",
+      storageBucket: "rotationstation-b820f.firebasestorage.app",
+      messagingSenderId: "208135227356",
+      appId: "1:208135227356:web:69eac3c59cb2a01a233119"
+    };
 
-      // Data States
-      const [users, setUsers] = useState([
-        { username: 'admin', role: 'admin', passwordSet: true },
-        { username: 'supervisor1', role: 'supervisor', passwordSet: true },
-        { username: 'observer_joe', role: 'observer', passwordSet: false }
-      ]);
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.firestore();
 
-      const [employees, setEmployees] = useState([
-        { id: '1', name: 'Alice Smith', clockNum: '101', shift: '1' },
-        { id: '2', name: 'Bob Jones', clockNum: '102', shift: '1' },
-        { id: '3', name: 'Charlie Brown', clockNum: '105', shift: '2' },
-        { id: '4', name: 'Diana Prince', clockNum: '110', shift: '2' }
-      ]);
+    // Helper: Calculate Sunday-to-Saturday Week Key (e.g., "2026-10-04")
+    const getWeekKey = (dateStr) => {
+      const d = new Date(dateStr + 'T00:00:00');
+      const day = d.getDay(); // 0 is Sunday
+      const diff = d.getDate() - day;
+      const sunday = new Date(d.setDate(diff));
+      return `${sunday.getFullYear()}-${(sunday.getMonth() + 1).toString().padStart(2, '0')}-${sunday.getDate().toString().padStart(2, '0')}`;
+    };
 
-      const [benches, setBenches] = useState([
-        { id: 'b1', name: 'Line A (Assembly)' },
-        { id: 'b2', name: 'Line B (Testing)' },
-        { id: 'b3', name: 'Packaging Station' },
-        { id: 'b4', name: 'Quality Control' }
-      ]);
+    function App() {
+      const [activeTab, setActiveTab] = useState('schedule');
+      const [managementSubTab, setManagementSubTab] = useState('users'); 
+      
+      const [darkMode, setDarkMode] = useState(() => {
+        return localStorage.getItem('rotation_dark_mode') === 'true';
+      });
 
-      // Form inputs
-      const [newUsername, setNewUsername] = useState('');
-      const [newUserRole, setNewUserRole] = useState('supervisor');
-      const [newEmpName, setNewEmpName] = useState('');
-      const [newEmpClock, setNewEmpClock] = useState('');
-      const [newEmpShift, setNewEmpShift] = useState('1');
+      const [scheduleLocked, setScheduleLocked] = useState(true);
+      const [editEmployees, setEditEmployees] = useState(false);
+      const [editBenches, setEditBenches] = useState(false);
+      
+      const [user, setUser] = useState(null);
+      const [authStep, setAuthStep] = useState('login'); 
+      const [pendingUser, setPendingUser] = useState(null);
+      const [usernameInput, setUsernameInput] = useState('');
+      const [passwordInput, setPasswordInput] = useState('');
+      const [newPasswordInput, setNewPasswordInput] = useState('');
+      const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
+      const [authError, setAuthError] = useState('');
+
+      const [employees, setEmployees] = useState([]);
+      const [benches, setBenches] = useState([]);
+      const [schedules, setSchedules] = useState({});
+      const [weeklyNotes, setWeeklyNotes] = useState({});
+      const [usersList, setUsersList] = useState([]);
+      const [activeSessions, setActiveSessions] = useState({});
+
+      const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+      const [activeShift, setActiveShift] = useState("1");
+      
+      const [newEmployeeName, setNewEmployeeName] = useState('');
+      const [newEmployeeClockNum, setNewEmployeeClockNum] = useState('');
+      const [newEmployeeShift, setNewEmployeeShift] = useState('1');
       const [newBenchName, setNewBenchName] = useState('');
+      
+      const [newUsernameInput, setNewUsernameInput] = useState('');
+      const [newUserRole, setNewUserRole] = useState('supervisor'); // 'admin' | 'supervisor' | 'observer'
+      const [selectedCellData, setSelectedCellData] = useState(null);
 
-      const handleAddUser = (e) => {
-        e.preventDefault();
-        if (!newUsername.trim()) return;
-        setUsers([...users, { username: newUsername.trim(), role: newUserRole, passwordSet: false }]);
-        setNewUsername('');
+      // Exception Modal State
+      const [selectedEmployeeForModal, setSelectedEmployeeForModal] = useState(null);
+
+      // Notes Modal & Notification State
+      const [isNotesOpen, setIsNotesOpen] = useState(false);
+      const [hasUnreadNotes, setHasUnreadNotes] = useState(false);
+      const [noteInputText, setNoteInputText] = useState('');
+
+      const currentWeekKey = getWeekKey(selectedDate);
+      const currentWeekNotes = weeklyNotes[currentWeekKey]?.notes || [];
+
+      useEffect(() => {
+        setEditEmployees(false);
+        setEditBenches(false);
+      }, [activeTab, managementSubTab]);
+
+      useEffect(() => {
+        localStorage.setItem('rotation_dark_mode', darkMode);
+      }, [darkMode]);
+
+      // Load session and set up real-time Firestore listeners
+      useEffect(() => {
+        const savedSession = localStorage.getItem('rotation_session');
+        if (savedSession) setUser(JSON.parse(savedSession));
+
+        // Real-time listener for Employees
+        const unsubEmployees = db.collection('employees').onSnapshot(snapshot => {
+          const list = [];
+          snapshot.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
+          setEmployees(list);
+        });
+
+        // Real-time listener for Benches
+        const unsubBenches = db.collection('benches').onSnapshot(snapshot => {
+          const list = [];
+          snapshot.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
+          setBenches(list);
+        });
+
+        // Real-time listener for Users
+        const unsubUsers = db.collection('users').onSnapshot(snapshot => {
+          const list = [];
+          snapshot.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
+          if (list.length === 0) {
+            const defaultAdmin = { username: 'admin', password: 'password123', role: 'admin', passwordSet: true };
+            db.collection('users').doc('admin').set(defaultAdmin);
+            setUsersList([defaultAdmin]);
+          } else {
+            setUsersList(list);
+          }
+        });
+
+        // Real-time listener for Schedules
+        const unsubSchedules = db.collection('schedules').onSnapshot(snapshot => {
+          const scheds = {};
+          snapshot.forEach(doc => {
+            scheds[doc.id] = doc.data();
+          });
+          setSchedules(scheds);
+        });
+
+        // Real-time listener for Weekly Shift Notes
+        const unsubNotes = db.collection('weekly_notes').onSnapshot(snapshot => {
+          const notesData = {};
+          snapshot.forEach(doc => {
+            notesData[doc.id] = doc.data();
+          });
+          setWeeklyNotes(notesData);
+
+          const activeNotes = notesData[currentWeekKey]?.notes || [];
+          const lastReadCount = parseInt(localStorage.getItem(`read_notes_${currentWeekKey}`) || '0');
+          if (activeNotes.length > lastReadCount) {
+            setHasUnreadNotes(true);
+          }
+        });
+
+        // Real-time listener for Active Sessions
+        const unsubSessions = db.collection('sessions').onSnapshot(snapshot => {
+          const sessions = {};
+          snapshot.forEach(doc => {
+            sessions[doc.id] = doc.data();
+          });
+          setActiveSessions(sessions);
+        });
+
+        return () => {
+          unsubEmployees();
+          unsubBenches();
+          unsubUsers();
+          unsubSchedules();
+          unsubNotes();
+          unsubSessions();
+        };
+      }, [currentWeekKey]);
+
+      // Update active session heartbeat in Firestore
+      useEffect(() => {
+        if (user) {
+          db.collection('sessions').doc(user.username).set({
+            role: user.role,
+            lastActive: new Date().toLocaleTimeString()
+          });
+        }
+      }, [user]);
+
+      const handleOpenNotes = () => {
+        setIsNotesOpen(true);
+        setHasUnreadNotes(false);
+        localStorage.setItem(`read_notes_${currentWeekKey}`, currentWeekNotes.length.toString());
       };
 
-      const handleAddEmployee = (e) => {
+      const handleAddWeeklyNote = async (e) => {
         e.preventDefault();
-        if (!newEmpName.trim()) return;
-        setEmployees([...employees, { id: Date.now().toString(), name: newEmpName.trim(), clockNum: newEmpClock.trim(), shift: newEmpShift }]);
-        setNewEmpName('');
-        setNewEmpClock('');
+        if (!noteInputText.trim() || !user) return;
+
+        const dateObj = new Date();
+        const dateStr = dateObj.toLocaleDateString([], { weekday: 'short', month: 'numeric', day: 'numeric' });
+        const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        const newEntry = {
+          id: Date.now(),
+          author: user.username,
+          role: user.role,
+          timestamp: `${dateStr} @ ${timeStr}`,
+          text: noteInputText.trim()
+        };
+
+        const updatedNotes = [...currentWeekNotes, newEntry];
+        await db.collection('weekly_notes').doc(currentWeekKey).set({
+          notes: updatedNotes
+        });
+
+        setNoteInputText('');
+        localStorage.setItem(`read_notes_${currentWeekKey}`, updatedNotes.length.toString());
       };
 
-      const handleAddBench = (e) => {
+      // Seniority-sorted views for Schedule & Analytics (lower clock number = higher seniority/first)
+      const sortedEmployees = [...employees].sort((a, b) => {
+        const clockA = a.clockNum !== undefined && a.clockNum !== '' ? parseInt(a.clockNum, 10) : 999999;
+        const clockB = b.clockNum !== undefined && b.clockNum !== '' ? parseInt(b.clockNum, 10) : 999999;
+        if (!isNaN(clockA) && !isNaN(clockB) && clockA !== clockB) {
+          return clockA - clockB;
+        }
+        return a.name.localeCompare(b.name);
+      });
+
+      // Alphabetical sorting specifically for Management Roster to prevent card jumping while typing clock numbers
+      const managementSortedEmployees = [...employees].sort((a, b) => a.name.localeCompare(b.name));
+
+      const sortedBenches = [...benches].sort((a, b) => a.name.localeCompare(b.name));
+
+      const extendedEmployees = [...sortedEmployees, { id: 'not-running', name: 'Not Running', shift: activeShift, restrictedBenches: [] }];
+      
+      const getDayData = (date) => {
+        if (!schedules[date]) {
+          const allBenchIds = benches.map(b => b.id);
+          return {
+            shiftCount: 2,
+            isOT: false,
+            shifts: {
+              "1": { benchTeams: {}, inactiveBenches: allBenchIds },
+              "2": { benchTeams: {}, inactiveBenches: allBenchIds }
+            }
+          };
+        }
+        return schedules[date];
+      };
+      
+      const currentDayData = getDayData(selectedDate);
+      const isOTActive = currentDayData.isOT || false;
+      const currentShiftData = currentDayData.shifts[activeShift] || { benchTeams: {}, inactiveBenches: benches.map(b => b.id) };
+
+      const handleAuth = (e) => {
         e.preventDefault();
-        if (!newBenchName.trim()) return;
-        setBenches([...benches, { id: Date.now().toString(), name: newBenchName.trim() }]);
+        setAuthError('');
+        const trimmedUser = usernameInput.trim().toLowerCase();
+        if (!trimmedUser || !passwordInput) {
+          setAuthError('Please enter both a username and password.');
+          return;
+        }
+
+        const foundUser = usersList.find(u => u.username.toLowerCase() === trimmedUser);
+
+        if (!foundUser) {
+          setAuthError('Username not found. Contact your Admin to create your account.');
+          return;
+        }
+
+        if (!foundUser.passwordSet) {
+          setPendingUser(foundUser);
+          setAuthStep('setup_password');
+          return;
+        }
+
+        if (foundUser.password !== passwordInput) {
+          setAuthError('Incorrect password.');
+          return;
+        }
+
+        setUser(foundUser);
+        localStorage.setItem('rotation_session', JSON.stringify(foundUser));
+      };
+
+      const handleFirstTimePasswordSetup = async (e) => {
+        e.preventDefault();
+        setAuthError('');
+        if (!newPasswordInput || newPasswordInput.length < 4) {
+          setAuthError('Password must be at least 4 characters long.');
+          return;
+        }
+        if (newPasswordInput !== confirmPasswordInput) {
+          setAuthError('Passwords do not match.');
+          return;
+        }
+
+        await db.collection('users').doc(pendingUser.username).update({
+          password: newPasswordInput,
+          passwordSet: true
+        });
+
+        const updatedUserSession = { ...pendingUser, password: newPasswordInput, passwordSet: true };
+        setUser(updatedUserSession);
+        localStorage.setItem('rotation_session', JSON.stringify(updatedUserSession));
+      };
+
+      const handleLogout = async () => {
+        if (user) {
+          await db.collection('sessions').doc(user.username).delete();
+        }
+        setUser(null);
+        localStorage.removeItem('rotation_session');
+        setUsernameInput('');
+        setPasswordInput('');
+        setAuthStep('login');
+      };
+
+      const handleCreateUser = async (e) => {
+        e.preventDefault();
+        if (user?.role !== 'admin' || !newUsernameInput.trim()) return;
+        const trimmedNewUser = newUsernameInput.trim();
+        const trimmedLower = trimmedNewUser.toLowerCase();
+
+        if (usersList.find(u => u.username.toLowerCase() === trimmedLower)) {
+          alert('A user with this username already exists.');
+          return;
+        }
+
+        const newUserObj = {
+          username: trimmedNewUser,
+          password: '',
+          role: newUserRole,
+          passwordSet: false
+        };
+
+        await db.collection('users').doc(trimmedNewUser).set(newUserObj);
+        setNewUsernameInput('');
+      };
+
+      const handleDeleteUser = async (usernameToDelete) => {
+        if (user?.role !== 'admin' || usernameToDelete === 'admin') return;
+        if (confirm(`Are you sure you want to revoke access for user "${usernameToDelete}"?`)) {
+          await db.collection('users').doc(usernameToDelete).delete();
+          await db.collection('sessions').doc(usernameToDelete).delete();
+        }
+      };
+
+      const handleResetUserPassword = async (targetUsername) => {
+        if (user?.role !== 'admin') return;
+        if (confirm(`Reset password for "${targetUsername}"? They will be forced to set a new password on their next login.`)) {
+          await db.collection('users').doc(targetUsername).update({
+            password: '',
+            passwordSet: false
+          });
+        }
+      };
+
+      const handleAddEmployee = async (e) => {
+        e.preventDefault();
+        if (user?.role !== 'admin' || !newEmployeeName.trim()) return;
+        const empId = Date.now().toString();
+        const newEmp = { 
+          id: empId, 
+          name: newEmployeeName.trim(), 
+          clockNum: newEmployeeClockNum.trim(),
+          shift: newEmployeeShift, 
+          restrictedBenches: [] 
+        };
+        await db.collection('employees').doc(empId).set(newEmp);
+        setNewEmployeeName('');
+        setNewEmployeeClockNum('');
+      };
+
+      const handleUpdateEmployeeField = async (id, field, value) => {
+        if (user?.role !== 'admin') return;
+        const updates = {};
+        updates[field] = value;
+        await db.collection('employees').doc(id).update(updates);
+      };
+
+      const handleDeleteEmployee = async (id, empName) => {
+        if (user?.role !== 'admin' || id === 'not-running') return;
+        if (confirm(`Are you sure you want to delete employee "${empName}" from the roster?`)) {
+          await db.collection('employees').doc(id).delete();
+        }
+      };
+
+      const handleAddBench = async (e) => {
+        e.preventDefault();
+        if (user?.role !== 'admin' || !newBenchName.trim()) return;
+        const benchId = Date.now().toString();
+        const newBench = { id: benchId, name: newBenchName.trim() };
+        await db.collection('benches').doc(benchId).set(newBench);
         setNewBenchName('');
       };
 
-      return (
-        <div className="max-w-4xl mx-auto p-3 sm:p-6 min-h-screen flex flex-col justify-between">
-          <div className="space-y-4">
-            
-            {/* Global Header (Two-row structure with Notes button pinned beside username badge) */}
-            <header className="pb-3 border-b border-slate-800 space-y-3">
-              <div className="flex justify-between items-center">
-                <h1 className="text-lg sm:text-xl font-black tracking-tight bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
-                  RotationStation <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-normal">v1.5.0</span>
-                </h1>
-                
-                {/* User Badge + Shift Notes Button Pinned Together */}
-                <div className="flex items-center gap-2">
-                  <div className="px-2.5 py-1 rounded-lg bg-slate-800/80 border border-slate-700/60 text-xs font-bold text-slate-200 flex items-center gap-1.5 shadow-sm">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    admin
+      const handleDeleteBench = async (id, benchName) => {
+        if (user?.role !== 'admin') return;
+        if (confirm(`Are you sure you want to delete workstation "${benchName}"?`)) {
+          await db.collection('benches').doc(id).delete();
+        }
+      };
+
+      const saveScheduleToFirestore = async (newData) => {
+        await db.collection('schedules').doc(selectedDate).set(newData);
+      };
+
+      const handleShiftCountChange = (count) => {
+        if (user?.role === 'observer') return;
+        const newData = { ...currentDayData, shiftCount: count };
+        for (let i = 1; i <= count; i++) {
+          if (!newData.shifts[i.toString()]) {
+            const allBenchIds = benches.map(b => b.id);
+            newData.shifts[i.toString()] = { benchTeams: {}, inactiveBenches: allBenchIds };
+          }
+        }
+        if (parseInt(activeShift) > count) setActiveShift("1");
+        saveScheduleToFirestore(newData);
+      };
+
+      const handleToggleOT = () => {
+        if (user?.role === 'observer' || scheduleLocked) return;
+        const newData = { ...currentDayData, isOT: !isOTActive };
+        saveScheduleToFirestore(newData);
+      };
+
+      const handleToggleAbsence = (empId) => {
+        if (user?.role === 'observer') return;
+        const newData = { ...currentDayData };
+        const shiftData = { ...currentShiftData };
+        let absList = shiftData.absentEmployees || [];
+        if (absList.includes(empId)) {
+          absList = absList.filter(id => id !== empId);
+        } else {
+          absList.push(empId);
+          Object.keys(shiftData.benchTeams || {}).forEach(bId => {
+            shiftData.benchTeams[bId] = (shiftData.benchTeams[bId] || []).filter(id => id !== empId);
+          });
+        }
+        shiftData.absentEmployees = absList;
+        newData.shifts[activeShift] = shiftData;
+        saveScheduleToFirestore(newData);
+      };
+
+      const handleToggleBenchInactive = (benchId) => {
+        if (user?.role === 'observer') return;
+        const newData = { ...currentDayData };
+        const shiftData = { ...currentShiftData };
+        let inactive = shiftData.inactiveBenches || [];
+        if (inactive.includes(benchId)) {
+          inactive = inactive.filter(id => id !== benchId);
+        } else {
+          inactive.push(benchId);
+          const teams = { ...(shiftData.benchTeams || {}) };
+          delete teams[benchId];
+          shiftData.benchTeams = teams;
+        }
+        shiftData.inactiveBenches = inactive;
+        newData.shifts[activeShift] = shiftData;
+        saveScheduleToFirestore(newData);
+      };
+
+      const handleAssignEmployee = (benchId, employeeId) => {
+        if (user?.role === 'observer' || !employeeId) return;
+        const newData = { ...currentDayData };
+        const shiftData = { ...currentShiftData };
+        const benchTeams = { ...(shiftData.benchTeams || {}) };
+        let benchTeam = benchTeams[benchId] || [];
+        if (!Array.isArray(benchTeam)) benchTeam = [benchTeam];
+
+        if (!benchTeam.includes(employeeId)) {
+          benchTeams[benchId] = [...benchTeam, employeeId];
+          shiftData.benchTeams = benchTeams;
+          newData.shifts[activeShift] = shiftData;
+          saveScheduleToFirestore(newData);
+        }
+      };
+
+      const handleRemoveEmployee = (benchId, employeeId) => {
+        if (user?.role === 'observer') return;
+        const newData = { ...currentDayData };
+        const shiftData = { ...currentShiftData };
+        const benchTeams = { ...(shiftData.benchTeams || {}) };
+        let benchTeam = benchTeams[benchId] || [];
+        if (!Array.isArray(benchTeam)) benchTeam = [benchTeam];
+
+        benchTeams[benchId] = benchTeam.filter(id => id !== employeeId);
+        shiftData.benchTeams = benchTeams;
+        newData.shifts[activeShift] = shiftData;
+        saveScheduleToFirestore(newData);
+      };
+
+      const calculateAnalytics = () => {
+        const stats = {};
+        const datesTracked = {}; 
+
+        extendedEmployees.forEach(emp => {
+          stats[emp.id] = {};
+          datesTracked[emp.id] = {};
+          sortedBenches.forEach(bench => {
+            stats[emp.id][bench.id] = 0;
+            datesTracked[emp.id][bench.id] = [];
+          });
+        });
+
+        Object.keys(schedules).forEach(dateStr => {
+          const dayData = schedules[dateStr];
+          if (!dayData || !dayData.shifts) return;
+
+          Object.keys(dayData.shifts).forEach(shiftNum => {
+            if (parseInt(shiftNum) > dayData.shiftCount) return;
+            const shiftAssignments = dayData.shifts[shiftNum]?.benchTeams || {};
+
+            Object.keys(shiftAssignments).forEach(benchId => {
+              let team = shiftAssignments[benchId] || [];
+              if (!Array.isArray(team)) team = [team];
+
+              team.forEach(empId => {
+                if (stats[empId]?.[benchId] !== undefined) {
+                  stats[empId][benchId]++;
+                  datesTracked[empId][benchId].push(`${dateStr} (Shift ${shiftNum})`);
+                }
+              });
+            });
+          });
+        });
+
+        return { stats, datesTracked };
+      };
+
+      const { stats, datesTracked } = calculateAnalytics();
+
+      const getHeatmapColor = (count) => {
+        if (count === 0) return darkMode ? 'bg-slate-800 text-slate-500' : 'bg-slate-100 text-slate-700 border border-slate-200';
+        return 'bg-emerald-600 text-white font-bold';
+      };
+
+      if (!user) {
+        return (
+          <div className={`min-h-screen flex items-center justify-center p-4 ${darkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-100 text-slate-900'}`}>
+            <div className={`w-full max-w-md border rounded-xl shadow-lg p-8 ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-900'}`}>
+              <div className="flex justify-between items-center mb-6">
+                <h1 className="text-2xl font-bold tracking-tight">RotationStation</h1>
+              </div>
+
+              {authStep === 'login' && (
+                <>
+                  <p className={`text-sm mb-6 ${darkMode ? 'text-slate-400' : 'text-slate-700'}`}>
+                    Sign in with your assigned username. If it is your first time logging in, you will be prompted to create your password.
+                  </p>
+                  {authError && <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-800 text-sm rounded-lg font-semibold">{authError}</div>}
+                  <form onSubmit={handleAuth} className="space-y-4">
+                    <div>
+                      <label className={`block text-sm font-semibold mb-1.5 ${darkMode ? 'text-slate-200' : 'text-slate-900'}`}>Username</label>
+                      <input type="text" value={usernameInput} onChange={(e) => setUsernameInput(e.target.value)} className={`w-full p-3 border rounded-lg outline-none transition font-medium ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900 focus:bg-white focus:border-blue-500'}`} placeholder="e.g. admin" />
+                    </div>
+                    <div>
+                      <label className={`block text-sm font-semibold mb-1.5 ${darkMode ? 'text-slate-200' : 'text-slate-900'}`}>Password</label>
+                      <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} className={`w-full p-3 border rounded-lg outline-none transition font-medium ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900 focus:bg-white focus:border-blue-500'}`} placeholder="••••••••" />
+                    </div>
+                    <button type="submit" className="w-full py-3 bg-blue-600 hover:bg-blue-700 font-semibold rounded-lg text-white shadow transition">Sign In</button>
+                  </form>
+                </>
+              )}
+
+              {authStep === 'setup_password' && (
+                <>
+                  <div className="mb-4 p-3 bg-blue-50 border border-blue-200 text-blue-900 text-sm rounded-lg font-medium">
+                    Welcome <strong>{pendingUser.username}</strong>! This is your first time logging in. Please choose a personal password.
                   </div>
+                  {authError && <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-800 text-sm rounded-lg font-semibold">{authError}</div>}
+                  <form onSubmit={handleFirstTimePasswordSetup} className="space-y-4">
+                    <div>
+                      <label className={`block text-sm font-semibold mb-1.5 ${darkMode ? 'text-slate-200' : 'text-slate-900'}`}>New Password</label>
+                      <input type="password" value={newPasswordInput} onChange={(e) => setNewPasswordInput(e.target.value)} className={`w-full p-3 border rounded-lg outline-none transition font-medium ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900 focus:bg-white focus:border-blue-500'}`} placeholder="At least 4 characters" />
+                    </div>
+                    <div>
+                      <label className={`block text-sm font-semibold mb-1.5 ${darkMode ? 'text-slate-200' : 'text-slate-900'}`}>Confirm Password</label>
+                      <input type="password" value={confirmPasswordInput} onChange={(e) => setConfirmPasswordInput(e.target.value)} className={`w-full p-3 border rounded-lg outline-none transition font-medium ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900 focus:bg-white focus:border-blue-500'}`} placeholder="Confirm password" />
+                    </div>
+                    <button type="submit" className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 font-semibold rounded-lg text-white shadow transition">Save Password & Continue</button>
+                  </form>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className={`min-h-screen ${darkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-100 text-slate-900'}`}>
+          {/* Two-row top bar */}
+          <div className={`p-3 md:p-4 border-b ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 shadow-sm text-slate-900'}`}>
+            <div className="max-w-6xl mx-auto space-y-2">
+              {/* Row 1: Title on left, Username Badge & Notes on far right */}
+              <div className="flex justify-between items-center">
+                <h1 className="text-lg md:text-xl font-bold tracking-tight">RotationStation</h1>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs px-2.5 py-1 rounded-full uppercase tracking-wider font-bold ${user.role === 'admin' ? 'bg-purple-100 text-purple-900 dark:bg-purple-900 dark:text-purple-200' : user.role === 'supervisor' ? 'bg-blue-100 text-blue-900 dark:bg-blue-900 dark:text-blue-200' : 'bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-200'}`}>
+                    {user.username}
+                  </span>
                   <button 
-                    onClick={() => setShowNotesModal(true)}
-                    className="px-2.5 py-1 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-300 text-xs font-bold transition flex items-center gap-1"
-                    title="Shift Notes"
+                    onClick={handleOpenNotes} 
+                    className="relative px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg text-xs transition shadow-sm flex items-center gap-1.5"
                   >
                     📝 Notes
+                    {hasUnreadNotes && (
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-600 border border-white"></span>
+                      </span>
+                    )}
                   </button>
                 </div>
               </div>
 
-              {/* Navigation Tabs (Compact 4-column 2-row layout with strict bounds to prevent overflow) */}
-              <div className="grid grid-cols-4 gap-1.5">
-                <button 
-                  onClick={() => setCurrentTab('schedule')} 
-                  className={`py-2 px-1 rounded-xl text-xs font-bold text-center transition truncate ${currentTab === 'schedule' ? 'bg-purple-600 text-white shadow-md shadow-purple-900/30' : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/50'}`}
-                >
-                  Schedule
-                </button>
-                <button 
-                  onClick={() => setCurrentTab('analytics')} 
-                  className={`py-2 px-1 rounded-xl text-xs font-bold text-center transition truncate ${currentTab === 'analytics' ? 'bg-purple-600 text-white shadow-md shadow-purple-900/30' : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/50'}`}
-                >
-                  Analytics
-                </button>
-                <button 
-                  onClick={() => setCurrentTab('management')} 
-                  className={`py-2 px-1 rounded-xl text-xs font-bold text-center transition truncate ${currentTab === 'management' ? 'bg-purple-600 text-white shadow-md shadow-purple-900/30' : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/50'}`}
-                >
-                  Management
-                </button>
-                <button 
-                  onClick={() => setCurrentTab('settings')} 
-                  className={`py-2 px-1 rounded-xl text-xs font-bold text-center transition truncate ${currentTab === 'settings' ? 'bg-purple-600 text-white shadow-md shadow-purple-900/30' : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/50'}`}
-                >
-                  Settings
-                </button>
+              {/* Row 2: Navigation tabs as 4-column grid with compact padding so they never wrap or scroll */}
+              <div className="grid grid-cols-4 gap-1 pt-1">
+                <button onClick={() => setActiveTab('schedule')} className={`py-1.5 px-1 md:px-4 rounded-lg text-[11px] md:text-sm font-semibold text-center truncate transition ${activeTab === 'schedule' ? 'bg-blue-600 text-white shadow-sm' : darkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-100 text-slate-800 hover:bg-slate-200'}`}>Schedule</button>
+                <button onClick={() => setActiveTab('analytics')} className={`py-1.5 px-1 md:px-4 rounded-lg text-[11px] md:text-sm font-semibold text-center truncate transition ${activeTab === 'analytics' ? 'bg-blue-600 text-white shadow-sm' : darkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-100 text-slate-800 hover:bg-slate-200'}`}>Analytics</button>
+                
+                {user.role === 'admin' ? (
+                  <button onClick={() => setActiveTab('management')} className={`py-1.5 px-1 md:px-4 rounded-lg text-[11px] md:text-sm font-semibold text-center truncate transition ${activeTab === 'management' ? 'bg-blue-600 text-white shadow-sm' : darkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-100 text-slate-800 hover:bg-slate-200'}`}>Management</button>
+                ) : <div />}
+
+                <button onClick={() => setActiveTab('settings')} className={`py-1.5 px-1 md:px-4 rounded-lg text-[11px] md:text-sm font-semibold text-center truncate transition ${activeTab === 'settings' ? 'bg-blue-600 text-white shadow-sm' : darkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-100 text-slate-800 hover:bg-slate-200'}`}>Settings</button>
               </div>
-            </header>
-
-            {/* Main Content Area */}
-            <main className="pt-2">
-              {currentTab === 'schedule' && (
-                <div className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800 text-center space-y-3">
-                  <h2 className="text-base font-bold text-slate-200">Shift Schedule Board</h2>
-                  <p className="text-xs text-slate-400">Seniority-sorted operator rotation tracking across workstations.</p>
-                </div>
-              )}
-
-              {currentTab === 'analytics' && (
-                <div className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800 text-center space-y-3">
-                  <h2 className="text-base font-bold text-slate-200">Supervisor Analytics</h2>
-                  <p className="text-xs text-slate-400">Shift statistics, exceptions, and workstation utilization metrics.</p>
-                </div>
-              )}
-
-              {currentTab === 'management' && (
-                <div className="rounded-2xl bg-slate-900/50 border border-slate-800 p-4 sm:p-5 space-y-4">
-                  <div className="flex justify-between items-center pb-3 border-b border-slate-800">
-                    <h2 className="text-base font-bold text-slate-200">Management Center</h2>
-                    <span className="text-[10px] text-slate-400">Powder Coat Line • 143 Racks</span>
-                  </div>
-
-                  {/* Horizontal Non-Scrolling Management Sub-Tabs */}
-                  <div className="grid grid-cols-3 gap-2 pb-3 border-b border-slate-800/60">
-                    <button 
-                      onClick={() => setManagementSubTab('users')} 
-                      className={`py-2 px-2 rounded-xl text-xs sm:text-sm font-bold text-center transition ${managementSubTab === 'users' ? 'bg-purple-600 text-white shadow-sm' : 'bg-slate-800 text-slate-300 hover:bg-slate-800/80 border border-slate-700/50'}`}
-                    >
-                      🔐 Users
-                    </button>
-                    <button 
-                      onClick={() => setManagementSubTab('employees')} 
-                      className={`py-2 px-2 rounded-xl text-xs sm:text-sm font-bold text-center transition ${managementSubTab === 'employees' ? 'bg-purple-600 text-white shadow-sm' : 'bg-slate-800 text-slate-300 hover:bg-slate-800/80 border border-slate-700/50'}`}
-                    >
-                      👥 Employees
-                    </button>
-                    <button 
-                      onClick={() => setManagementSubTab('benches')} 
-                      className={`py-2 px-2 rounded-xl text-xs sm:text-sm font-bold text-center transition ${managementSubTab === 'benches' ? 'bg-purple-600 text-white shadow-sm' : 'bg-slate-800 text-slate-300 hover:bg-slate-800/80 border border-slate-700/50'}`}
-                    >
-                      🛠️ Benches
-                    </button>
-                  </div>
-
-                  {/* Sub-Tab Content Views */}
-                  <div className="space-y-4 pt-1">
-                    {managementSubTab === 'users' && (
-                      <div className="space-y-4">
-                        <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-3">
-                          <h3 className="font-bold text-xs uppercase tracking-wider text-purple-400">Create New Login Account</h3>
-                          <form onSubmit={handleAddUser} className="flex gap-2 flex-wrap">
-                            <input 
-                              type="text" 
-                              placeholder="Username..." 
-                              value={newUsername} 
-                              onChange={(e) => setNewUsername(e.target.value)} 
-                              className="flex-1 min-w-[140px] p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-purple-500" 
-                            />
-                            <select 
-                              value={newUserRole} 
-                              onChange={(e) => setNewUserRole(e.target.value)} 
-                              className="p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-purple-500"
-                            >
-                              <option value="supervisor">Supervisor</option>
-                              <option value="observer">Observer</option>
-                              <option value="admin">Admin</option>
-                            </select>
-                            <button type="submit" className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md">+ Create</button>
-                          </form>
-                        </div>
-
-                        <div className="space-y-2">
-                          <h3 className="font-bold text-xs text-slate-400 px-1">Existing Accounts ({users.length})</h3>
-                          {users.map(u => (
-                            <div key={u.username} className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex justify-between items-center">
-                              <div>
-                                <p className="font-bold text-sm text-slate-200">{u.username} <span className="text-[10px] uppercase px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 ml-1.5">{u.role}</span></p>
-                                <p className="text-[11px] text-slate-400 mt-0.5">{u.passwordSet ? '✓ Password configured' : '⚠️ Pending setup'}</p>
-                              </div>
-                              {u.username !== 'admin' && (
-                                <button onClick={() => setUsers(users.filter(x => x.username !== u.username))} className="px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 rounded-lg text-xs font-bold transition">Revoke</button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {managementSubTab === 'employees' && (
-                      <div className="space-y-4">
-                        <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-3">
-                          <h3 className="font-bold text-xs uppercase tracking-wider text-purple-400">Add Employee to Roster</h3>
-                          <form onSubmit={handleAddEmployee} className="flex gap-2 flex-wrap">
-                            <input 
-                              type="text" 
-                              placeholder="Name..." 
-                              value={newEmpName} 
-                              onChange={(e) => setNewEmpName(e.target.value)} 
-                              className="flex-1 min-w-[130px] p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-purple-500" 
-                            />
-                            <input 
-                              type="text" 
-                              placeholder="Clock #..." 
-                              value={newEmpClock} 
-                              onChange={(e) => setNewEmpClock(e.target.value)} 
-                              className="w-24 p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-purple-500" 
-                            />
-                            <select 
-                              value={newEmpShift} 
-                              onChange={(e) => setNewEmpShift(e.target.value)} 
-                              className="p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-purple-500"
-                            >
-                              <option value="1">Shift 1</option>
-                              <option value="2">Shift 2</option>
-                              <option value="3">Shift 3</option>
-                            </select>
-                            <button type="submit" className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md">+ Add</button>
-                          </form>
-                        </div>
-
-                        <div className="space-y-2">
-                          <h3 className="font-bold text-xs text-slate-400 px-1">Active Roster ({employees.length})</h3>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                            {employees.map(emp => (
-                              <div key={emp.id} className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex justify-between items-center">
-                                <div>
-                                  <p className="font-bold text-sm text-slate-200">{emp.name}</p>
-                                  <p className="text-[11px] text-slate-400 mt-0.5">Clock #{emp.clockNum || 'None'} • Shift {emp.shift}</p>
-                                </div>
-                                <button onClick={() => setEmployees(employees.filter(e => e.id !== emp.id))} className="w-8 h-8 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 rounded-lg font-bold flex items-center justify-center transition">×</button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {managementSubTab === 'benches' && (
-                      <div className="space-y-4">
-                        <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-3">
-                          <h3 className="font-bold text-xs uppercase tracking-wider text-purple-400">Add Workstation / Bench</h3>
-                          <form onSubmit={handleAddBench} className="flex gap-2">
-                            <input 
-                              type="text" 
-                              placeholder="Bench name..." 
-                              value={newBenchName} 
-                              onChange={(e) => setNewBenchName(e.target.value)} 
-                              className="flex-1 p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-purple-500" 
-                            />
-                            <button type="submit" className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md">+ Add</button>
-                          </form>
-                        </div>
-
-                        <div className="space-y-2">
-                          <h3 className="font-bold text-xs text-slate-400 px-1">Configured Benches ({benches.length})</h3>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                            {benches.map(bench => (
-                              <div key={bench.id} className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex justify-between items-center">
-                                <p className="font-bold text-sm text-slate-200">{bench.name}</p>
-                                <button onClick={() => setBenches(benches.filter(b => b.id !== bench.id))} className="w-8 h-8 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 rounded-lg font-bold flex items-center justify-center transition">×</button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {currentTab === 'settings' && (
-                <div className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800 space-y-4">
-                  <h2 className="text-base font-bold text-slate-200">Application Settings</h2>
-                  <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex justify-between items-center">
-                    <div>
-                      <p className="font-bold text-sm text-slate-200">RotationStation Version</p>
-                      <p className="text-xs text-slate-400">Current active build deployed on GitHub Pages</p>
-                    </div>
-                    <span className="px-3 py-1 rounded-lg bg-purple-500/20 text-purple-300 font-mono text-xs font-bold">v1.5.0</span>
-                  </div>
-                </div>
-              )}
-            </main>
+            </div>
           </div>
 
-          {/* Footer */}
-          <footer className="pt-6 mt-6 border-t border-slate-800 text-center text-xs text-slate-500">
-            RotationStation • Manufacturing Floor Management System
-          </footer>
+          <div className="max-w-6xl mx-auto p-4 md:p-6">
+            {user.role === 'observer' && activeTab === 'schedule' && (
+              <div className="mb-4 p-3 bg-amber-50 border border-amber-300 text-amber-900 text-xs font-bold rounded-xl flex items-center justify-between">
+                <span>👁️ You are viewing in Observer Mode (Read-Only). You can view the schedule and post Weekly Shift Notes.</span>
+              </div>
+            )}
 
-          {/* Shift Notes Modal Preview */}
-          {showNotesModal && (
-            <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 max-w-md w-full space-y-4 shadow-2xl">
-                <div className="flex justify-between items-center pb-3 border-b border-slate-800">
-                  <h3 className="font-bold text-sm text-slate-200">Shift Notes</h3>
-                  <button onClick={() => setShowNotesModal(false)} className="text-slate-400 hover:text-white font-bold text-sm">✕</button>
+            {activeTab === 'schedule' && (
+              <div className="space-y-6">
+                <div className={`p-4 rounded-xl flex flex-col md:flex-row justify-between items-center gap-4 border ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 shadow-sm text-slate-900'}`}>
+                  <div className="flex flex-wrap items-center gap-4">
+                    <input type="date" value={selectedDate} onChange={(e) => { setSelectedDate(e.target.value); setActiveShift("1"); }} className={`p-2.5 border rounded-lg font-semibold ${darkMode ? 'bg-slate-900 border-slate-600 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'}`} />
+                    <div className="flex items-center gap-2">
+                      <span className={`text-sm font-semibold ${darkMode ? 'text-slate-300' : 'text-slate-900'}`}>Shifts:</span>
+                      <select value={currentDayData.shiftCount} onChange={(e) => handleShiftCountChange(parseInt(e.target.value))} className={`p-2.5 border rounded-lg font-semibold ${darkMode ? 'bg-slate-900 border-slate-600 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'}`} disabled={user.role === 'observer' || scheduleLocked}>
+                        <option value={1}>1 Shift</option>
+                        <option value={2}>2 Shifts</option>
+                        <option value={3}>3 Shifts</option>
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={handleToggleOT} 
+                        disabled={user.role === 'observer' || scheduleLocked}
+                        className={`px-3 py-2 rounded-lg font-extrabold text-xs transition shadow-xs ${isOTActive ? 'bg-amber-500 text-white' : darkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}
+                      >
+                        OT {isOTActive ? '● ON' : '○ OFF'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {user.role !== 'observer' && (
+                    <button onClick={() => setScheduleLocked(!scheduleLocked)} className={`px-4 py-2.5 rounded-lg font-medium transition ${scheduleLocked ? (darkMode ? 'bg-slate-700 text-slate-200 hover:bg-slate-600' : 'bg-slate-100 text-slate-900 hover:bg-slate-200') : 'bg-blue-600 text-white shadow-sm'}`}>
+                      {scheduleLocked ? '🔒 Locked' : '🔓 Editing Active'}
+                    </button>
+                  )}
                 </div>
-                <textarea 
-                  rows="4" 
-                  placeholder="Record shift handoff notes or exceptions..." 
-                  className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-purple-500 resize-none"
-                ></textarea>
-                <div className="flex justify-end gap-2">
-                  <button onClick={() => setShowNotesModal(false)} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition">Save Notes</button>
+
+                {currentDayData.shiftCount > 1 && (
+                  <div className={`flex gap-2 border-b ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+                    {Array.from({ length: currentDayData.shiftCount }, (_, i) => (i + 1).toString()).map(shift => (
+                      <button key={shift} onClick={() => setActiveShift(shift)} className={`px-5 py-2.5 rounded-t-lg font-bold border-b-2 transition ${activeShift === shift ? 'border-blue-600 text-blue-600 bg-white dark:bg-slate-800 dark:text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-900'}`}>
+                        Shift {shift}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div className={`p-4 rounded-xl border ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 shadow-sm text-slate-900'}`}>
+                  <h4 className={`text-sm font-bold mb-3 ${darkMode ? 'text-slate-300' : 'text-slate-900'}`}>
+                    {isOTActive ? '⚡ OT Mode Active (All Employees Available):' : `Shift ${activeShift} Crew Availability (Tap to toggle absence):`}
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {(isOTActive ? sortedEmployees : sortedEmployees.filter(emp => emp.shift === activeShift)).length === 0 ? (
+                      <span className={`text-xs italic font-medium ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>No employees available.</span>
+                    ) : (
+                      (isOTActive ? sortedEmployees : sortedEmployees.filter(emp => emp.shift === activeShift)).map(emp => {
+                        const isAbsent = (currentShiftData.absentEmployees || []).includes(emp.id);
+                        return (
+                          <button key={emp.id} onClick={() => user.role !== 'observer' && !scheduleLocked && handleToggleAbsence(emp.id)} disabled={user.role === 'observer' || scheduleLocked} className={`px-3.5 py-2 rounded-lg text-xs font-bold transition shadow-xs ${isAbsent ? 'bg-red-500 text-white line-through' : darkMode ? 'bg-slate-700 text-slate-200 hover:bg-slate-600' : 'bg-slate-100 text-slate-900 hover:bg-slate-200 border border-slate-300'}`}>
+                            {emp.name} {isAbsent ? '(Absent)' : ''}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {sortedBenches.map(bench => {
+                    const isInactive = (currentShiftData.inactiveBenches || []).includes(bench.id);
+                    const team = currentShiftData.benchTeams?.[bench.id] || [];
+                    
+                    const allAssignedOnShift = Object.values(currentShiftData.benchTeams || {}).flat();
+
+                    const poolSource = isOTActive ? sortedEmployees : sortedEmployees.filter(e => e.shift === activeShift);
+                    const shiftEmployees = poolSource.filter(emp => {
+                      if ((currentShiftData.absentEmployees || []).includes(emp.id)) return false;
+                      if (allAssignedOnShift.includes(emp.id)) return false;
+                      const restricted = emp.restrictedBenches || [];
+                      if (restricted.includes(bench.name)) return false;
+                      return true;
+                    });
+
+                    const sortedAvailable = [...shiftEmployees].sort((a, b) => (stats[a.id]?.[bench.id] || 0) - (stats[b.id]?.[bench.id] || 0));
+
+                    return (
+                      <div key={bench.id} className={`p-5 rounded-xl border shadow-xs ${isInactive ? 'opacity-60 bg-slate-50 dark:bg-slate-900/50 border-dashed border-slate-300' : darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-900'}`}>
+                        <div className="flex justify-between items-start mb-4">
+                          <h3 className={`font-bold text-base ${darkMode ? 'text-white' : 'text-slate-900'}`}>{bench.name}</h3>
+                          {user.role !== 'observer' && !scheduleLocked && (
+                            <button onClick={() => handleToggleBenchInactive(bench.id)} className={`text-xs px-2.5 py-1 rounded-md font-semibold text-white transition ${isInactive ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-amber-600 hover:bg-amber-700'}`}>
+                              {isInactive ? 'Set Active' : 'Mark Down'}
+                            </button>
+                          )}
+                        </div>
+
+                        {isInactive ? (
+                          <p className="text-sm font-semibold text-amber-600 dark:text-amber-500 py-6 text-center">⚠️ Bench Down / Inactive</p>
+                        ) : (
+                          <>
+                            <div className="flex flex-wrap gap-2 mb-4 min-h-[44px]">
+                              {team.length === 0 ? (
+                                <span className={`text-sm italic font-medium ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>No one assigned</span>
+                              ) : (
+                                team.map(empId => {
+                                  const emp = extendedEmployees.find(e => e.id === empId);
+                                  return emp ? (
+                                    <span key={empId} className="inline-flex items-center px-3 py-1 rounded-lg text-sm font-bold bg-blue-50 text-blue-900 border border-blue-200 dark:bg-blue-900 dark:text-blue-100 dark:border-blue-800">
+                                      {emp.name}
+                                      {user.role !== 'observer' && !scheduleLocked && <button onClick={() => handleRemoveEmployee(bench.id, empId)} className="ml-2 text-blue-700 hover:text-blue-900 dark:text-blue-300 font-extrabold">×</button>}
+                                    </span>
+                                  ) : null;
+                                })
+                              )}
+                            </div>
+                            {user.role !== 'observer' && !scheduleLocked && (
+                              <select className={`w-full p-2.5 border rounded-lg text-sm font-bold ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'}`} onChange={(e) => handleAssignEmployee(bench.id, e.target.value)} value="">
+                                <option value="" disabled>+ Add employee...</option>
+                                {sortedAvailable.map(emp => (
+                                  <option key={emp.id} value={emp.id}>{emp.name} (Ran {stats[emp.id]?.[bench.id] || 0}x)</option>
+                                ))}
+                              </select>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'analytics' && (
+              <div className={`p-6 rounded-xl border shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-900'}`}>
+                <h2 className={`text-xl font-bold mb-6 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Rotation Matrix</h2>
+                
+                <div className="overflow-x-auto max-w-full relative">
+                  <table className={`w-full text-sm text-left border-collapse ${darkMode ? 'text-slate-300' : 'text-slate-900'}`}>
+                    <thead>
+                      <tr className={`border-b font-extrabold ${darkMode ? 'border-slate-700 text-white bg-slate-800' : 'border-slate-300 text-slate-900 bg-white'}`}>
+                        <th className={`p-3 font-extrabold sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>Employee</th>
+                        {sortedBenches.map(b => <th key={b.id} className="p-3 text-center font-extrabold whitespace-nowrap">{b.name}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedEmployees.map(emp => (
+                        <tr key={emp.id} className={`border-b transition ${darkMode ? 'border-slate-700/60 hover:bg-slate-700/20' : 'border-slate-200 hover:bg-slate-50'}`}>
+                          <td className={`p-3 font-bold sticky left-0 z-10 whitespace-nowrap shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] ${darkMode ? 'bg-slate-800 text-slate-100' : 'bg-white text-slate-900'}`}>
+                            {emp.name} {emp.clockNum ? <span className="text-xs opacity-75 font-normal">(#{emp.clockNum})</span> : ''}
+                          </td>
+                          {sortedBenches.map(bench => {
+                            const count = stats[emp.id]?.[bench.id] || 0;
+                            return (
+                              <td key={bench.id} className="p-3 text-center cursor-pointer whitespace-nowrap" onClick={() => setSelectedCellData({ emp, bench, count, dates: datesTracked[emp.id]?.[bench.id] || [] })}>
+                                <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-extrabold transition shadow-xs ${getHeatmapColor(count)}`}>{count}</span>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'management' && user.role === 'admin' && (
+              <div className={`p-6 rounded-xl border shadow-sm space-y-6 ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-900'}`}>
+                <div>
+                  <h2 className={`text-xl font-bold mb-1 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Management Center</h2>
+                  <p className={`text-sm font-medium mb-6 ${darkMode ? 'text-slate-400' : 'text-slate-700'}`}>Administrative control over user logins, employee rosters, and physical workstations.</p>
+                  
+                  <div className={`flex gap-2 border-b pb-4 overflow-x-auto ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+                    <button onClick={() => setManagementSubTab('users')} className={`px-4 py-2 rounded-lg text-sm font-bold transition whitespace-nowrap ${managementSubTab === 'users' ? 'bg-purple-600 text-white shadow-xs' : darkMode ? 'bg-slate-700 text-slate-200' : 'bg-slate-200 text-slate-900'}`}>
+                      🔐 User Accounts & Active Logins
+                    </button>
+                    <button onClick={() => setManagementSubTab('employees')} className={`px-4 py-2 rounded-lg text-sm font-bold transition whitespace-nowrap ${managementSubTab === 'employees' ? 'bg-purple-600 text-white shadow-xs' : darkMode ? 'bg-slate-700 text-slate-200' : 'bg-slate-200 text-slate-900'}`}>
+                      👥 Employees Roster
+                    </button>
+                    <button onClick={() => setManagementSubTab('benches')} className={`px-4 py-2 rounded-lg text-sm font-bold transition whitespace-nowrap ${managementSubTab === 'benches' ? 'bg-purple-600 text-white shadow-xs' : darkMode ? 'bg-slate-700 text-slate-200' : 'bg-slate-200 text-slate-900'}`}>
+                      🛠️ Benches / Workstations
+                    </button>
+                  </div>
+                </div>
+
+                {managementSubTab === 'users' && (
+                  <div className="space-y-6">
+                    <div className={`p-5 rounded-xl border ${darkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'}`}>
+                      <h3 className={`font-bold text-base mb-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Create New Login Account</h3>
+                      <p className={`text-xs font-semibold mb-4 ${darkMode ? 'text-slate-400' : 'text-slate-700'}`}>Assign a username and role. The user will be prompted to set their own password upon first login.</p>
+                      <form onSubmit={handleCreateUser} className="flex gap-2 flex-wrap md:flex-nowrap">
+                        <input type="text" placeholder="Username..." value={newUsernameInput} onChange={(e) => setNewUsernameInput(e.target.value)} className={`flex-1 p-2.5 border rounded-lg text-sm font-semibold ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-400 text-slate-900'}`} />
+                        <select value={newUserRole} onChange={(e) => setNewUserRole(e.target.value)} className={`p-2.5 border rounded-lg text-sm font-semibold ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-400 text-slate-900'}`}>
+                          <option value="supervisor">Supervisor</option>
+                          <option value="observer">Observer (Read-Only)</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                        <button type="submit" className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold transition shadow-xs">+ Create Account</button>
+                      </form>
+                    </div>
+
+                    <div>
+                      <h3 className={`font-bold text-base mb-3 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Existing System Accounts</h3>
+                      <div className="space-y-3">
+                        {usersList.map(acc => {
+                          const isOnline = activeSessions[acc.username];
+                          return (
+                            <div key={acc.username} className={`p-4 rounded-xl border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 ${darkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-300 shadow-xs text-slate-900'}`}>
+                              <div className="flex items-center gap-3">
+                                <span className={`w-3 h-3 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
+                                <div>
+                                  <p className={`font-bold text-sm flex items-center gap-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+                                    {acc.username} 
+                                    <span className={`text-xs font-extrabold uppercase px-2 py-0.5 rounded ${darkMode ? 'bg-slate-800 text-slate-200' : 'bg-slate-200 text-slate-900'}`}>{acc.role}</span>
+                                  </p>
+                                  <p className={`text-xs font-semibold mt-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                                    {acc.passwordSet ? '✓ Password configured' : '⚠️ Pending first-time password setup'} 
+                                    {isOnline ? ` • Online since ${isOnline.lastActive}` : ''}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                <button onClick={() => handleResetUserPassword(acc.username)} className="px-3 py-2 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 transition shadow-xs">Reset Password</button>
+                                {acc.username !== 'admin' && (
+                                  <button onClick={() => handleDeleteUser(acc.username)} className="px-3 py-2 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 transition shadow-xs">Revoke Access</button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {managementSubTab === 'employees' && (
+                  <div className="space-y-6">
+                    <div className={`p-5 rounded-xl border ${darkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'}`}>
+                      <h3 className={`font-bold text-base mb-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Add Employee to Roster</h3>
+                      <p className={`text-xs font-semibold mb-4 ${darkMode ? 'text-slate-400' : 'text-slate-700'}`}>Operational floor workers.</p>
+                      <form onSubmit={handleAddEmployee} className="flex gap-2 flex-wrap md:flex-nowrap">
+                        <input type="text" placeholder="Employee Name..." value={newEmployeeName} onChange={(e) => setNewEmployeeName(e.target.value)} className={`flex-1 p-2.5 border rounded-lg text-sm font-semibold ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-400 text-slate-900'}`} />
+                        <input type="text" placeholder="Clock #..." value={newEmployeeClockNum} onChange={(e) => setNewEmployeeClockNum(e.target.value)} className={`w-36 p-2.5 border rounded-lg text-sm font-semibold ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-400 text-slate-900'}`} />
+                        <select value={newEmployeeShift} onChange={(e) => setNewEmployeeShift(e.target.value)} className={`p-2.5 border rounded-lg text-sm font-semibold ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-400 text-slate-900'}`}>
+                          <option value="1">Shift 1</option><option value="2">Shift 2</option><option value="3">Shift 3</option>
+                        </select>
+                        <button type="submit" className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold transition shadow-xs">+ Add Employee</button>
+                      </form>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-center mb-3">
+                        <h3 className={`font-bold text-base ${darkMode ? 'text-white' : 'text-slate-900'}`}>Active Roster ({employees.length} workers)</h3>
+                        <button onClick={() => setEditEmployees(!editEmployees)} className={`text-xs px-3 py-1.5 rounded-lg font-bold transition shadow-xs ${editEmployees ? 'bg-amber-600 text-white' : darkMode ? 'bg-slate-700 text-slate-200 hover:bg-slate-600' : 'bg-slate-200 text-slate-900 hover:bg-slate-300 border border-slate-300'}`}>
+                          {editEmployees ? '🔒 Lock Deletions' : '✏️ Enable Delete Mode'}
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                        {managementSortedEmployees.map(emp => (
+                          <div key={emp.id} className={`p-3.5 rounded-xl border flex flex-col justify-between gap-3 ${darkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-300 text-slate-900 shadow-xs'}`}>
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <p className={`font-bold text-sm ${darkMode ? 'text-white' : 'text-slate-900'}`}>{emp.name}</p>
+                                <p className={`text-xs font-semibold mt-0.5 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>Clock #: {emp.clockNum || 'None'}</p>
+                              </div>
+                              <div className="flex gap-2">
+                                <button onClick={() => setSelectedEmployeeForModal(emp)} className="text-xs px-2 py-1 bg-slate-700 text-white rounded font-bold hover:bg-slate-800">Exceptions</button>
+                                {editEmployees && (
+                                  <button onClick={() => handleDeleteEmployee(emp.id, emp.name)} className="w-8 h-8 rounded-lg bg-red-600 text-white font-extrabold flex items-center justify-center hover:bg-red-700 transition shadow-xs">×</button>
+                                )}
+                              </div>
+                            </div>
+                            <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
+                              <label className="text-[10px] font-bold text-slate-400 block mb-0.5">Clock # (Seniority)</label>
+                              <input 
+                                type="text" 
+                                value={emp.clockNum || ''} 
+                                onChange={(e) => handleUpdateEmployeeField(emp.id, 'clockNum', e.target.value)}
+                                placeholder="Clock #" 
+                                className={`w-full p-1.5 border rounded-lg text-xs font-bold ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-100 border-slate-300 text-slate-900'}`}
+                              />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs font-bold ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Shift:</span>
+                              <select 
+                                value={emp.shift} 
+                                onChange={(e) => handleUpdateEmployeeField(emp.id, 'shift', e.target.value)} 
+                                className={`w-full p-1.5 border rounded-lg text-xs font-bold ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-100 border-slate-300 text-slate-900'}`}
+                              >
+                                <option value="1">Shift 1</option>
+                                <option value="2">Shift 2</option>
+                                <option value="3">Shift 3</option>
+                              </select>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {managementSubTab === 'benches' && (
+                  <div className="space-y-6">
+                    <div className={`p-5 rounded-xl border ${darkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'}`}>
+                      <h3 className={`font-bold text-base mb-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Add Workstation / Bench</h3>
+                      <p className={`text-xs font-semibold mb-4 ${darkMode ? 'text-slate-400' : 'text-slate-700'}`}>Physical factory benches or lines used for shift assignments.</p>
+                      <form onSubmit={handleAddBench} className="flex gap-2">
+                        <input type="text" placeholder="Bench name (e.g. Assembly Line B)..." value={newBenchName} onChange={(e) => setNewBenchName(e.target.value)} className={`flex-1 p-2.5 border rounded-lg text-sm font-semibold ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-400 text-slate-900'}`} />
+                        <button type="submit" className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold transition shadow-xs">+ Add Bench</button>
+                      </form>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-center mb-3">
+                        <h3 className={`font-bold text-base ${darkMode ? 'text-white' : 'text-slate-900'}`}>Configured Benches ({benches.length})</h3>
+                        <button onClick={() => setEditBenches(!editBenches)} className={`text-xs px-3 py-1.5 rounded-lg font-bold transition shadow-xs ${editBenches ? 'bg-amber-600 text-white' : darkMode ? 'bg-slate-700 text-slate-200 hover:bg-slate-600' : 'bg-slate-200 text-slate-900 hover:bg-slate-300 border border-slate-300'}`}>
+                          {editBenches ? '🔒 Lock Deletions' : '✏️ Enable Delete Mode'}
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                        {sortedBenches.map(bench => (
+                          <div key={bench.id} className={`p-3.5 rounded-xl border flex justify-between items-center ${darkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-300 text-slate-900 shadow-xs'}`}>
+                            <p className={`font-bold text-sm ${darkMode ? 'text-white' : 'text-slate-900'}`}>{bench.name}</p>
+                            {editBenches && (
+                              <button onClick={() => handleDeleteBench(bench.id, bench.name)} className="w-8 h-8 rounded-lg bg-red-600 text-white font-extrabold flex items-center justify-center hover:bg-red-700 transition shadow-xs">×</button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'settings' && (
+              <div className={`p-6 rounded-xl border shadow-sm space-y-6 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                <div>
+                  <h2 className={`text-xl font-bold mb-4 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Account Information</h2>
+                  <div className={`p-4 rounded-xl border ${darkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'}`}>
+                    <p className={`text-sm font-bold ${darkMode ? 'text-slate-300' : 'text-slate-900'}`}>Signed in username: <strong className="text-blue-600 dark:text-blue-400">{user.username}</strong></p>
+                    <p className={`text-sm font-bold capitalize mt-1 ${darkMode ? 'text-slate-300' : 'text-slate-900'}`}>Role: <strong className={darkMode ? 'text-slate-100' : 'text-slate-900'}>{user.role}</strong></p>
+                  </div>
+                </div>
+
+                <div>
+                  <h2 className={`text-xl font-bold mb-4 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Appearance</h2>
+                  <div className={`p-4 rounded-xl border flex items-center justify-between ${darkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'}`}>
+                    <div>
+                      <p className={`font-bold text-sm ${darkMode ? 'text-white' : 'text-slate-900'}`}>Theme Preference</p>
+                      <p className={`text-xs font-semibold ${darkMode ? 'text-slate-400' : 'text-slate-700'}`}>Switch between light and dark visual mode.</p>
+                    </div>
+                    <button onClick={() => setDarkMode(!darkMode)} className="px-4 py-2 bg-slate-200 text-slate-900 dark:bg-slate-700 dark:text-white hover:bg-slate-300 dark:hover:bg-slate-600 font-bold text-sm rounded-lg transition shadow-xs">
+                      {darkMode ? '🌙 Dark Mode (Active)' : '☀️ Light Mode (Active)'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                  <span className="text-xs text-slate-400">RotationStation v1.4.4</span>
+                  <button onClick={handleLogout} className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow transition">
+                    Log Out of Account
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Employee Exceptions Modal */}
+          {selectedEmployeeForModal && user.role === 'admin' && (
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+              <div className={`w-full max-w-md p-6 rounded-2xl shadow-xl border space-y-4 ${darkMode ? 'bg-slate-800 text-white border-slate-700' : 'bg-white text-slate-900 border-slate-300'}`}>
+                <h3 className="text-lg font-bold">Exceptions: {selectedEmployeeForModal.name}</h3>
+                <p className="text-xs text-slate-500">Check benches this employee is <strong>restricted</strong> from running (whitelisted everywhere else by default):</p>
+                <div className="space-y-2 max-h-60 overflow-y-auto border p-3 rounded-xl">
+                  {benches.map(bench => {
+                    const restricted = selectedEmployeeForModal.restrictedBenches || [];
+                    const isChecked = restricted.includes(bench.name);
+                    return (
+                      <label key={bench.id} className="flex items-center gap-3 cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          checked={isChecked}
+                          onChange={async (e) => {
+                            const updated = e.target.checked 
+                              ? [...restricted, bench.name]
+                              : restricted.filter(b => b !== bench.name);
+                            
+                            await db.collection('employees').doc(selectedEmployeeForModal.id).update({
+                              restrictedBenches: updated
+                            });
+                            setSelectedEmployeeForModal({
+                              ...selectedEmployeeForModal,
+                              restrictedBenches: updated
+                            });
+                          }}
+                          className="w-4 h-4 rounded"
+                        />
+                        <span className="text-sm font-semibold">{bench.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <button onClick={() => setSelectedEmployeeForModal(null)} className="w-full py-2.5 bg-slate-800 text-white rounded-xl font-bold">Done</button>
+              </div>
+            </div>
+          )}
+
+          {/* Weekly Shift Notes Pop-Open Modal */}
+          {isNotesOpen && (
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+              <div className={`w-full max-w-lg rounded-2xl shadow-xl border p-6 flex flex-col max-h-[85vh] ${darkMode ? 'bg-slate-800 text-white border-slate-700' : 'bg-white text-slate-900 border-slate-300'}`}>
+                <div className="flex justify-between items-center pb-4 border-b border-slate-200 dark:border-slate-700 mb-4">
+                  <div>
+                    <h3 className="text-lg font-bold">Weekly Shift Handover Log</h3>
+                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Week of {currentWeekKey} (Sun - Sat)</p>
+                  </div>
+                  <button onClick={() => setIsNotesOpen(false)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">×</button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-1">
+                  {currentWeekNotes.length === 0 ? (
+                    <p className="text-sm italic text-slate-500 text-center py-8">No notes posted for this week yet.</p>
+                  ) : (
+                    currentWeekNotes.map(note => (
+                      <div key={note.id} className={`p-3 border rounded-xl space-y-1 ${darkMode ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="font-bold text-blue-600 dark:text-blue-400">
+                            [{note.author} <span className="uppercase text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">{note.role}</span>]
+                          </span>
+                          <span className="text-slate-400 font-medium">{note.timestamp}</span>
+                        </div>
+                        <p className="text-sm font-medium">{note.text}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <form onSubmit={handleAddWeeklyNote} className="space-y-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                  <textarea 
+                    value={noteInputText} 
+                    onChange={(e) => setNoteInputText(e.target.value)} 
+                    placeholder={`Post weekly note as [${user.username}]...`} 
+                    className={`w-full p-3 border rounded-xl text-sm outline-none font-medium ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'}`}
+                    rows={2}
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button type="button" onClick={() => setIsNotesOpen(false)} className="px-4 py-2 bg-slate-200 dark:bg-slate-700 font-bold text-sm rounded-lg">Close</button>
+                    <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 font-bold text-sm text-white rounded-lg shadow-xs">+ Post Note Entry</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {selectedCellData && (
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+              <div className={`w-full max-w-md p-6 rounded-2xl shadow-xl border ${darkMode ? 'bg-slate-800 text-white border-slate-700' : 'bg-white text-slate-900 border-slate-300'}`}>
+                <h3 className={`text-lg font-bold mb-1 ${darkMode ? 'text-white' : 'text-slate-900'}`}>{selectedCellData.emp.name} @ {selectedCellData.bench.name}</h3>
+                <p className={`text-sm font-semibold mb-4 ${darkMode ? 'text-slate-400' : 'text-slate-700'}`}>Total shifts: <span className="font-bold text-blue-600 dark:text-blue-400">{selectedCellData.count}</span></p>
+                <div className={`max-h-60 overflow-y-auto space-y-2 border-t border-b py-3 ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+                  {selectedCellData.dates.length === 0 ? <p className={`text-sm italic font-medium ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>No shifts recorded yet.</p> : selectedCellData.dates.map((d, i) => <div key={i} className={`text-sm font-semibold ${darkMode ? 'text-slate-300' : 'text-slate-800'}`}>📅 {d}</div>)}
+                </div>
+                <button onClick={() => setSelectedCellData(null)} className="w-full mt-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow transition">Close</button>
               </div>
             </div>
           )}
@@ -350,7 +1107,7 @@
       );
     }
 
-    ReactDOM.render(<RotationStationApp />, document.getElementById('root'));
+    ReactDOM.render(<App />, document.getElementById('root'));
   </script>
 </body>
 </html>
