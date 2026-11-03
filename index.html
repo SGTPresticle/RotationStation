@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RotationStation v1.6.6</title>
+  <title>RotationStation v1.6.7</title>
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- React & ReactDOM -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <!-- Babel for JSX -->
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <!-- Firebase SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
@@ -615,7 +615,7 @@
           <div className={`min-h-screen flex items-center justify-center p-4 ${darkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-100 text-slate-900'}`}>
             <div className={`w-full max-w-md border rounded-xl shadow-lg p-8 ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-900'}`}>
               <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold tracking-tight">RotationStation <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono">v1.6.6</span></h1>
+                <h1 className="text-2xl font-bold tracking-tight">RotationStation <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono">v1.6.7</span></h1>
               </div>
 
               {authStep === 'login' && (
@@ -671,7 +671,7 @@
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2.5">
                   <h1 className="text-lg md:text-xl font-bold tracking-tight">RotationStation</h1>
-                  <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono font-bold">v1.6.6</span>
+                  <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono font-bold">v1.6.7</span>
                 </div>
                 <div className="flex items-center gap-2 relative">
                   <button 
@@ -744,46 +744,63 @@
             )}
 
             {activeTab === 'schedule' && (
-              <div className="space-y-6">
-                <div className={`p-4 rounded-xl flex flex-col md:flex-row justify-between items-center gap-4 border ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 shadow-sm text-slate-900'}`}>
-                  <div className="flex flex-wrap items-center gap-4">
-                    <input type="date" value={selectedDate} onChange={(e) => { setSelectedDate(e.target.value); setActiveShift("1"); }} className={`p-2.5 border rounded-lg font-semibold ${darkMode ? 'bg-slate-900 border-slate-600 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'}`} />
-                    <div className="flex items-center gap-2">
-                      <span className={`text-sm font-semibold ${darkMode ? 'text-slate-300' : 'text-slate-900'}`}>Shifts:</span>
-                      <select value={currentDayData.shiftCount} onChange={(e) => handleShiftCountChange(parseInt(e.target.value))} className={`p-2.5 border rounded-lg font-semibold ${darkMode ? 'bg-slate-900 border-slate-600 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'}`} disabled={user.role === 'observer' || scheduleLocked}>
+              <div className="space-y-4">
+                {/* 1. Single Top Control Row (Date, Shifts, and OT Toggle Side-by-Side) */}
+                <div className={`p-3 rounded-xl border flex items-center justify-between gap-2 shadow-md ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-900'}`}>
+                  <div className="flex items-center gap-2 overflow-x-auto">
+                    <input 
+                      type="date" 
+                      value={selectedDate} 
+                      onChange={(e) => { setSelectedDate(e.target.value); setActiveShift("1"); }} 
+                      className={`p-1.5 border rounded-lg font-semibold text-xs shrink-0 outline-none ${darkMode ? 'bg-slate-900 border-slate-600 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'}`} 
+                    />
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className={`text-xs font-semibold ${darkMode ? 'text-slate-300' : 'text-slate-900'}`}>Shifts:</span>
+                      <select 
+                        value={currentDayData.shiftCount} 
+                        onChange={(e) => handleShiftCountChange(parseInt(e.target.value))} 
+                        className={`p-1.5 border rounded-lg font-semibold text-xs outline-none ${darkMode ? 'bg-slate-900 border-slate-600 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'}`} 
+                        disabled={user.role === 'observer' || scheduleLocked}
+                      >
                         <option value={1}>1 Shift</option>
                         <option value={2}>2 Shifts</option>
                         <option value={3}>3 Shifts</option>
                       </select>
                     </div>
-
-                    <div className="flex items-center gap-2">
-                      <button 
-                        onClick={handleToggleOT} 
-                        disabled={user.role === 'observer' || scheduleLocked}
-                        className={`px-3 py-2 rounded-lg font-extrabold text-xs transition shadow-xs ${isOTActive ? 'bg-amber-500 text-white' : darkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}
-                      >
-                        OT {isOTActive ? '● ON' : '○ OFF'}
-                      </button>
-                    </div>
                   </div>
 
-                  {user.role !== 'observer' && (
-                    <button onClick={() => setScheduleLocked(!scheduleLocked)} className={`px-4 py-2.5 rounded-lg font-medium transition ${scheduleLocked ? (darkMode ? 'bg-slate-700 text-slate-200 hover:bg-slate-600' : 'bg-slate-100 text-slate-900 hover:bg-slate-200') : 'bg-blue-600 text-white shadow-sm'}`}>
-                      {scheduleLocked ? '🔒 Locked' : '🔓 Editing Active'}
-                    </button>
-                  )}
+                  <button 
+                    onClick={handleToggleOT} 
+                    disabled={user.role === 'observer' || scheduleLocked}
+                    className={`px-3 py-1.5 rounded-lg font-extrabold text-xs transition shadow-xs shrink-0 ${isOTActive ? 'bg-amber-500 text-white' : darkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}
+                  >
+                    OT {isOTActive ? '● ON' : '○ OFF'}
+                  </button>
                 </div>
 
-                {currentDayData.shiftCount > 1 && (
-                  <div className={`flex gap-2 border-b ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+                {/* 2. Shift Tabs Line with Edit / Done Toggle Button */}
+                <div className={`flex justify-between items-center border-b px-1 ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+                  <div className="flex gap-1.5">
                     {Array.from({ length: currentDayData.shiftCount }, (_, i) => (i + 1).toString()).map(shift => (
-                      <button key={shift} onClick={() => setActiveShift(shift)} className={`px-5 py-2.5 rounded-t-lg font-bold border-b-2 transition ${activeShift === shift ? 'border-blue-600 text-blue-600 bg-white dark:bg-slate-800 dark:text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-900'}`}>
+                      <button 
+                        key={shift} 
+                        onClick={() => setActiveShift(shift)} 
+                        className={`px-4 py-2 rounded-t-lg font-bold text-xs border-b-2 transition ${activeShift === shift ? 'border-blue-600 text-blue-600 bg-white dark:bg-slate-800 dark:text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-900'}`}
+                      >
                         Shift {shift}
                       </button>
                     ))}
                   </div>
-                )}
+
+                  {user.role !== 'observer' && (
+                    <button 
+                      onClick={() => setScheduleLocked(!scheduleLocked)} 
+                      className={`text-xs px-3 py-1 mb-1 rounded-lg font-bold transition shadow-xs ${!scheduleLocked ? 'bg-amber-600 text-white' : darkMode ? 'bg-slate-700 text-slate-200 hover:bg-slate-600 border border-slate-600' : 'bg-slate-200 text-slate-900 hover:bg-slate-300 border border-slate-300'}`}
+                    >
+                      {!scheduleLocked ? 'Done' : 'Edit'}
+                    </button>
+                  )}
+                </div>
 
                 <div className={`p-4 rounded-xl border ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 shadow-sm text-slate-900'}`}>
                   <h4 className={`text-sm font-bold mb-3 ${darkMode ? 'text-slate-300' : 'text-slate-900'}`}>
