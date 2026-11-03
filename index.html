@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RotationStation v1.6.0</title>
+  <title>RotationStation v1.6.1</title>
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- React & ReactDOM -->
@@ -68,7 +68,7 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useRef } = React;
 
     // Initialize Firebase
     const firebaseConfig = {
@@ -114,7 +114,11 @@
       const [newPasswordInput, setNewPasswordInput] = useState('');
       const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
       const [authError, setAuthError] = useState('');
+      
+      // Account Menu & Logout Modal States
+      const [showAccountMenu, setShowAccountMenu] = useState(false);
       const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+      const accountMenuRef = useRef(null);
 
       const [employees, setEmployees] = useState([]);
       const [benches, setBenches] = useState([]);
@@ -154,6 +158,17 @@
       useEffect(() => {
         localStorage.setItem('rotation_dark_mode', darkMode);
       }, [darkMode]);
+
+      // Close account menu on outside click
+      useEffect(() => {
+        const handleClickOutside = (e) => {
+          if (accountMenuRef.current && !accountMenuRef.current.contains(e.target)) {
+            setShowAccountMenu(false);
+          }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+      }, []);
 
       // Load session and set up real-time Firestore listeners
       useEffect(() => {
@@ -370,6 +385,7 @@
         setPasswordInput('');
         setAuthStep('login');
         setShowLogoutConfirm(false);
+        setShowAccountMenu(false);
       };
 
       const handleCreateUser = async (e) => {
@@ -597,7 +613,7 @@
           <div className={`min-h-screen flex items-center justify-center p-4 ${darkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-100 text-slate-900'}`}>
             <div className={`w-full max-w-md border rounded-xl shadow-lg p-8 ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-900'}`}>
               <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold tracking-tight">RotationStation <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono">v1.6.0</span></h1>
+                <h1 className="text-2xl font-bold tracking-tight">RotationStation <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono">v1.6.1</span></h1>
               </div>
 
               {authStep === 'login' && (
@@ -647,25 +663,15 @@
       return (
         <div className={`min-h-screen ${darkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-100 text-slate-900'}`}>
           {/* Two-row top bar */}
-          <div className={`p-3 md:p-4 border-b no-print ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 shadow-sm text-slate-900'}`}>
+          <div className={`p-3 md:p-4 border-b no-print relative ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 shadow-sm text-slate-900'}`}>
             <div className="max-w-6xl mx-auto space-y-2">
-              {/* Row 1: Title & Version on left, Username Badge, Theme Toggle, Notes & Logout on far right */}
+              {/* Row 1: Title & Version on left, Notes & Account Menu Trigger on far right */}
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2.5">
                   <h1 className="text-lg md:text-xl font-bold tracking-tight">RotationStation</h1>
-                  <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono font-bold">v1.6.0</span>
+                  <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono font-bold">v1.6.1</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs px-2.5 py-1 rounded-full uppercase tracking-wider font-bold ${user.role === 'admin' ? 'bg-purple-100 text-purple-900 dark:bg-purple-900 dark:text-purple-200' : user.role === 'supervisor' ? 'bg-blue-100 text-blue-900 dark:bg-blue-900 dark:text-blue-200' : 'bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-200'}`}>
-                    {user.username}
-                  </span>
-                  <button 
-                    onClick={() => setDarkMode(!darkMode)} 
-                    className="px-2.5 py-1.5 bg-slate-200 text-slate-900 dark:bg-slate-700 dark:text-white hover:bg-slate-300 dark:hover:bg-slate-600 font-bold text-xs rounded-lg transition shadow-xs"
-                    title="Toggle Theme"
-                  >
-                    {darkMode ? '🌙' : '☀️'}
-                  </button>
+                <div className="flex items-center gap-2 relative">
                   <button 
                     onClick={handleOpenNotes} 
                     className="relative px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg text-xs transition shadow-sm flex items-center gap-1.5"
@@ -678,12 +684,41 @@
                       </span>
                     )}
                   </button>
-                  <button 
-                    onClick={() => setShowLogoutConfirm(true)} 
-                    className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg text-xs transition shadow-sm"
-                  >
-                    Log Out
-                  </button>
+
+                  {/* Clean Account Menu Trigger */}
+                  <div className="relative" ref={accountMenuRef}>
+                    <button 
+                      onClick={() => setShowAccountMenu(!showAccountMenu)}
+                      className={`text-xs px-3 py-1.5 rounded-lg uppercase tracking-wider font-extrabold flex items-center gap-1.5 transition shadow-xs ${user.role === 'admin' ? 'bg-purple-600 text-white hover:bg-purple-700' : user.role === 'supervisor' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-amber-600 text-white hover:bg-amber-700'}`}
+                    >
+                      <span>👤 {user.username}</span>
+                      <span className="text-[10px]">▼</span>
+                    </button>
+
+                    {/* Dropdown Menu */}
+                    {showAccountMenu && (
+                      <div className={`absolute right-0 mt-2 w-48 rounded-xl shadow-xl border py-2 z-50 ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-900'}`}>
+                        <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-700">
+                          <p className="text-xs font-bold text-slate-400">Signed in as</p>
+                          <p className="text-sm font-extrabold truncate">{user.username}</p>
+                          <p className="text-[10px] font-bold uppercase text-purple-400 mt-0.5">{user.role}</p>
+                        </div>
+                        <button 
+                          onClick={() => { setDarkMode(!darkMode); setShowAccountMenu(false); }}
+                          className={`w-full text-left px-4 py-2.5 text-xs font-bold flex items-center gap-2 transition ${darkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-100'}`}
+                        >
+                          {darkMode ? '☀️ Switch to Light Mode' : '🌙 Switch to Dark Mode'}
+                        </button>
+                        <div className="border-t border-slate-200 dark:border-slate-700 my-1"></div>
+                        <button 
+                          onClick={() => { setShowAccountMenu(false); setShowLogoutConfirm(true); }}
+                          className="w-full text-left px-4 py-2.5 text-xs font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center gap-2"
+                        >
+                          🚪 Log Out
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
