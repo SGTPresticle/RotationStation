@@ -14,6 +14,30 @@
   <!-- Firebase SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  
+  <style>
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #printable-analytics, #printable-analytics * {
+        visibility: visible;
+      }
+      #printable-analytics {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        background: white !important;
+        color: black !important;
+        border: none !important;
+        box-shadow: none !important;
+      }
+      button, header, footer, .no-print {
+        display: none !important;
+      }
+    }
+  </style>
 </head>
 <body class="overflow-x-hidden">
   <div id="root"></div>
@@ -596,7 +620,7 @@
       return (
         <div className={`min-h-screen ${darkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-100 text-slate-900'}`}>
           {/* Two-row top bar */}
-          <div className={`p-3 md:p-4 border-b ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 shadow-sm text-slate-900'}`}>
+          <div className={`p-3 md:p-4 border-b no-print ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 shadow-sm text-slate-900'}`}>
             <div className="max-w-6xl mx-auto space-y-2">
               {/* Row 1: Title on left, Username Badge & Notes on far right */}
               <div className="flex justify-between items-center">
@@ -636,7 +660,7 @@
 
           <div className="max-w-6xl mx-auto p-4 md:p-6">
             {user.role === 'observer' && activeTab === 'schedule' && (
-              <div className="mb-4 p-3 bg-amber-50 border border-amber-300 text-amber-900 text-xs font-bold rounded-xl flex items-center justify-between">
+              <div className="mb-4 p-3 bg-amber-50 border border-amber-300 text-amber-900 text-xs font-bold rounded-xl flex items-center justify-between no-print">
                 <span>👁️ You are viewing in Observer Mode (Read-Only). You can view the schedule and post Weekly Shift Notes.</span>
               </div>
             )}
@@ -769,35 +793,49 @@
             )}
 
             {activeTab === 'analytics' && (
-              <div className={`p-6 rounded-xl border shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-900'}`}>
-                <h2 className={`text-xl font-bold mb-6 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Rotation Matrix</h2>
-                
-                <div className="overflow-x-auto max-w-full relative">
-                  <table className={`w-full text-sm text-left border-collapse ${darkMode ? 'text-slate-300' : 'text-slate-900'}`}>
-                    <thead>
-                      <tr className={`border-b font-extrabold ${darkMode ? 'border-slate-700 text-white bg-slate-800' : 'border-slate-300 text-slate-900 bg-white'}`}>
-                        <th className={`p-3 font-extrabold sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>Employee</th>
-                        {sortedBenches.map(b => <th key={b.id} className="p-3 text-center font-extrabold whitespace-nowrap">{b.name}</th>)}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sortedEmployees.map(emp => (
-                        <tr key={emp.id} className={`border-b transition ${darkMode ? 'border-slate-700/60 hover:bg-slate-700/20' : 'border-slate-200 hover:bg-slate-50'}`}>
-                          <td className={`p-3 font-bold sticky left-0 z-10 whitespace-nowrap shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] ${darkMode ? 'bg-slate-800 text-slate-100' : 'bg-white text-slate-900'}`}>
-                            {emp.name} {emp.clockNum ? <span className="text-xs opacity-75 font-normal">(#{emp.clockNum})</span> : ''}
-                          </td>
-                          {sortedBenches.map(bench => {
-                            const count = stats[emp.id]?.[bench.id] || 0;
-                            return (
-                              <td key={bench.id} className="p-3 text-center cursor-pointer whitespace-nowrap" onClick={() => setSelectedCellData({ emp, bench, count, dates: datesTracked[emp.id]?.[bench.id] || [] })}>
-                                <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-extrabold transition shadow-xs ${getHeatmapColor(count)}`}>{count}</span>
-                              </td>
-                            );
-                          })}
+              <div className="space-y-4">
+                <div className="flex justify-end no-print">
+                  <button 
+                    onClick={() => window.print()} 
+                    className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition shadow-md flex items-center gap-1.5"
+                  >
+                    🖨️ Print / Save PDF Matrix
+                  </button>
+                </div>
+
+                <div id="printable-analytics" className={`p-6 rounded-xl border shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-900'}`}>
+                  <div className="flex justify-between items-center mb-6">
+                    <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>Rotation Matrix</h2>
+                    <span className="text-xs text-slate-400 hidden print:inline">Generated: {new Date().toLocaleDateString()}</span>
+                  </div>
+                  
+                  <div className="overflow-x-auto max-w-full relative">
+                    <table className={`w-full text-sm text-left border-collapse ${darkMode ? 'text-slate-300' : 'text-slate-900'}`}>
+                      <thead>
+                        <tr className={`border-b font-extrabold ${darkMode ? 'border-slate-700 text-white bg-slate-800' : 'border-slate-300 text-slate-900 bg-white'}`}>
+                          <th className={`p-3 font-extrabold sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] whitespace-nowrap ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>Employee</th>
+                          {sortedBenches.map(b => <th key={b.id} className="p-3 text-center font-extrabold whitespace-nowrap">{b.name}</th>)}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {sortedEmployees.map(emp => (
+                          <tr key={emp.id} className={`border-b transition ${darkMode ? 'border-slate-700/60 hover:bg-slate-700/20' : 'border-slate-200 hover:bg-slate-50'}`}>
+                            <td className={`p-3 font-bold sticky left-0 z-10 whitespace-nowrap shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] ${darkMode ? 'bg-slate-800 text-slate-100' : 'bg-white text-slate-900'}`}>
+                              {emp.name} {emp.clockNum ? <span className="text-xs opacity-75 font-normal">(#{emp.clockNum})</span> : ''}
+                            </td>
+                            {sortedBenches.map(bench => {
+                              const count = stats[emp.id]?.[bench.id] || 0;
+                              return (
+                                <td key={bench.id} className="p-3 text-center cursor-pointer whitespace-nowrap" onClick={() => setSelectedCellData({ emp, bench, count, dates: datesTracked[emp.id]?.[bench.id] || [] })}>
+                                  <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-extrabold transition shadow-xs ${getHeatmapColor(count)}`}>{count}</span>
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}
