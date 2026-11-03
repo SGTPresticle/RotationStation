@@ -813,8 +813,13 @@
                       (isOTActive ? sortedEmployees : sortedEmployees.filter(emp => emp.shift === activeShift)).map(emp => {
                         const isAbsent = (currentShiftData.absentEmployees || []).includes(emp.id);
                         return (
-                          <button key={emp.id} onClick={() => user.role !== 'observer' && !scheduleLocked && handleToggleAbsence(emp.id)} disabled={user.role === 'observer' || scheduleLocked} className={`px-3.5 py-2 rounded-lg text-xs font-bold transition shadow-xs ${isAbsent ? 'bg-red-500 text-white line-through' : darkMode ? 'bg-slate-700 text-slate-200 hover:bg-slate-600' : 'bg-slate-100 text-slate-900 hover:bg-slate-200 border border-slate-300'}`}>
-                            {emp.name} {isAbsent ? '(Absent)' : ''}
+                          <button 
+                            key={emp.id} 
+                            onClick={() => user.role !== 'observer' && !scheduleLocked && handleToggleAbsence(emp.id)} 
+                            disabled={user.role === 'observer' || scheduleLocked} 
+                            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition shadow-xs ${isAbsent ? 'bg-red-500 text-white line-through' : darkMode ? 'bg-slate-700 text-slate-200 hover:bg-slate-600' : 'bg-slate-100 text-slate-900 hover:bg-slate-200 border border-slate-300'}`}
+                          >
+                            {emp.name}
                           </button>
                         );
                       })
