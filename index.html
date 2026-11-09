@@ -98,7 +98,7 @@
       const [analyticsShiftTab, setAnalyticsShiftTab] = useState('all');
       
       const [darkMode, setDarkMode] = useState(() => {
-        return localStorage.getItem('rotation_dark_mode'] === 'true';
+        return localStorage.getItem('rotation_dark_mode') === 'true';
       });
 
       const [scheduleLocked, setScheduleLocked] = useState(true);
@@ -828,8 +828,8 @@
                   )}
                 </div>
 
-                {/* 2-Column Grid with Compact Header +- Controls & Manual Dropdown */}
-                <div className="grid grid-cols-2 gap-3">
+                {/* 2-Column Grid Layout matching v1.6.9 structure */}
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
                   {sortedBenches.map(bench => {
                     const isInactive = (currentShiftData.inactiveBenches || []).includes(bench.id);
                     const team = currentShiftData.benchTeams?.[bench.id] || [];
@@ -848,11 +848,11 @@
                     const sortedAvailable = [...shiftEmployees].sort((a, b) => (stats[a.id]?.[bench.id] || 0) - (stats[b.id]?.[bench.id] || 0));
 
                     return (
-                      <div key={bench.id} className={`p-3.5 rounded-xl border shadow-xs flex flex-col justify-between ${isInactive ? 'opacity-60 bg-slate-50 dark:bg-slate-900/50 border-dashed border-slate-300' : darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-900'}`}>
+                      <div key={bench.id} className={`p-3.5 md:p-5 rounded-xl border shadow-xs flex flex-col justify-between ${isInactive ? 'opacity-60 bg-slate-50 dark:bg-slate-900/50 border-dashed border-slate-300' : darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-900'}`}>
                         <div>
-                          <div className="flex justify-between items-start mb-2">
+                          <div className="flex justify-between items-start mb-3">
                             <div>
-                              <h3 className={`font-bold text-xs leading-tight truncate ${darkMode ? 'text-white' : 'text-slate-900'}`}>{bench.name}</h3>
+                              <h3 className={`font-bold text-xs md:text-base leading-tight truncate ${darkMode ? 'text-white' : 'text-slate-900'}`}>{bench.name}</h3>
                               {!scheduleLocked && !isInactive && (
                                 <div className="flex items-center gap-1 mt-1">
                                   <button onClick={() => handleSlotChange(bench.id, -1)} className="w-4 h-4 bg-slate-700 hover:bg-slate-600 rounded text-white font-extrabold text-[10px] flex items-center justify-center">-</button>
@@ -863,25 +863,25 @@
                             </div>
 
                             {user.role !== 'observer' && !scheduleLocked && (
-                              <button onClick={() => handleToggleBenchInactive(bench.id)} className={`text-[10px] px-2 py-0.5 rounded font-semibold text-white transition shrink-0 ml-1 ${isInactive ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-amber-600 hover:bg-amber-700'}`}>
+                              <button onClick={() => handleToggleBenchInactive(bench.id)} className={`text-[10px] md:text-xs px-2 py-1 rounded-md font-semibold text-white transition shrink-0 ml-1 ${isInactive ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-amber-600 hover:bg-amber-700'}`}>
                                 {isInactive ? 'Active' : 'Down'}
                               </button>
                             )}
                           </div>
 
                           {isInactive ? (
-                            <p className="text-[10px] font-semibold text-amber-600 dark:text-amber-500 py-4 text-center">⚠️ Down</p>
+                            <p className="text-xs font-semibold text-amber-600 dark:text-amber-500 py-6 text-center">⚠️ Down</p>
                           ) : (
-                            <div className="flex flex-wrap gap-1 mb-2 min-h-[32px] items-center">
+                            <div className="flex flex-wrap gap-1.5 mb-3 min-h-[36px]">
                               {team.length === 0 ? (
-                                <span className={`text-[10px] italic font-medium ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>No one assigned</span>
+                                <span className={`text-xs italic font-medium ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>No one assigned</span>
                               ) : (
                                 team.map(empId => {
                                   const emp = extendedEmployees.find(e => e.id === empId);
                                   return emp ? (
-                                    <span key={empId} className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-900 border border-blue-200 dark:bg-blue-900 dark:text-blue-100 dark:border-blue-800">
+                                    <span key={empId} className="inline-flex items-center px-2 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-900 border border-blue-200 dark:bg-blue-900 dark:text-blue-100 dark:border-blue-800">
                                       {emp.name}
-                                      {user.role !== 'observer' && !scheduleLocked && <button onClick={() => handleRemoveEmployee(bench.id, empId)} className="ml-1 text-blue-700 hover:text-blue-900 dark:text-blue-300 font-extrabold">×</button>}
+                                      {user.role !== 'observer' && !scheduleLocked && <button onClick={() => handleRemoveEmployee(bench.id, empId)} className="ml-1.5 text-blue-700 hover:text-blue-900 dark:text-blue-300 font-extrabold">×</button>}
                                     </span>
                                   ) : null;
                                 })
@@ -891,7 +891,7 @@
                         </div>
 
                         {!isInactive && user.role !== 'observer' && !scheduleLocked && (
-                          <select className={`w-full p-1.5 border rounded-lg text-xs font-bold ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'}`} onChange={(e) => handleAssignEmployee(bench.id, e.target.value)} value="">
+                          <select className={`w-full p-2 border rounded-lg text-xs font-bold ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'}`} onChange={(e) => handleAssignEmployee(bench.id, e.target.value)} value="">
                             <option value="" disabled>+ Add...</option>
                             {sortedAvailable.map(emp => (
                               <option key={emp.id} value={emp.id}>{emp.name} ({stats[emp.id]?.[bench.id] || 0}x)</option>
