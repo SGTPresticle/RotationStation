@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RotationStation v1.7.1</title>
+  <title>RotationStation v1.7.2</title>
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- React & ReactDOM -->
@@ -516,7 +516,7 @@
       };
 
       const handleSlotChange = (benchId, delta, benchDefaultCap = 1) => {
-        if (user?.role === 'observer' || scheduleLocked) return;
+        if (user?.role !== 'admin' || scheduleLocked) return;
         const newData = { ...currentDayData };
         const shiftData = { ...currentShiftData };
         const overrides = { ...(shiftData.slotOverrides || {}) };
@@ -659,7 +659,7 @@
           <div className={`min-h-screen flex items-center justify-center p-4 ${darkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-100 text-slate-900'}`}>
             <div className={`w-full max-w-md border rounded-xl shadow-lg p-8 ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-900'}`}>
               <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold tracking-tight">RotationStation <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono">v1.7.1</span></h1>
+                <h1 className="text-2xl font-bold tracking-tight">RotationStation <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono">v1.7.2</span></h1>
               </div>
 
               {authStep === 'login' && (
@@ -713,7 +713,7 @@
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2.5">
                   <h1 className="text-lg md:text-xl font-bold tracking-tight">RotationStation</h1>
-                  <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono font-bold">v1.7.1</span>
+                  <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono font-bold">v1.7.2</span>
                 </div>
                 <div className="flex items-center gap-2 relative">
                   <button onClick={handleOpenNotes} className="relative px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg text-xs transition shadow-sm flex items-center gap-1.5">
@@ -860,7 +860,7 @@
                           <div className="flex justify-between items-start mb-3">
                             <div>
                               <h3 className={`font-bold text-xs md:text-base leading-tight truncate ${darkMode ? 'text-white' : 'text-slate-900'}`}>{bench.name}</h3>
-                              {!scheduleLocked && !isInactive && (
+                              {user?.role === 'admin' && !scheduleLocked && !isInactive && (
                                 <div className="flex items-center gap-1 mt-1">
                                   <button onClick={() => handleSlotChange(bench.id, -1, defaultCap)} className="w-4 h-4 bg-slate-700 hover:bg-slate-600 rounded text-white font-extrabold text-[10px] flex items-center justify-center">-</button>
                                   <span className="text-[10px] font-extrabold text-blue-400 px-0.5">{requiredSlots}</span>
