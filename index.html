@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RotationStation v1.7.0</title>
+  <title>RotationStation v1.7.1</title>
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- React & ReactDOM -->
@@ -443,11 +443,10 @@
         setNewBenchDefaultCap('1');
       };
 
-      const handleUpdateBenchField = async (id, field, value) => {
+      const handleUpdateBenchDefaultCap = async (id, currentCap, delta) => {
         if (user?.role !== 'admin') return;
-        const updates = {};
-        updates[field] = field === 'defaultCap' ? Math.max(1, parseInt(value, 10) || 1) : value;
-        await db.collection('benches').doc(id).update(updates);
+        const next = Math.max(1, (currentCap || 1) + delta);
+        await db.collection('benches').doc(id).update({ defaultCap: next });
       };
 
       const handleDeleteBench = async (id, benchName) => {
@@ -601,7 +600,6 @@
 
       const { stats, datesTracked } = calculateAnalytics(analyticsShiftTab);
 
-      // Admin Beta Auto-Populate Shift Algorithm
       const handleAutoPopulateShift = () => {
         if (user?.role !== 'admin' || scheduleLocked) return;
 
@@ -661,7 +659,7 @@
           <div className={`min-h-screen flex items-center justify-center p-4 ${darkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-100 text-slate-900'}`}>
             <div className={`w-full max-w-md border rounded-xl shadow-lg p-8 ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-900'}`}>
               <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold tracking-tight">RotationStation <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono">v1.7.0</span></h1>
+                <h1 className="text-2xl font-bold tracking-tight">RotationStation <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono">v1.7.1</span></h1>
               </div>
 
               {authStep === 'login' && (
@@ -715,7 +713,7 @@
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2.5">
                   <h1 className="text-lg md:text-xl font-bold tracking-tight">RotationStation</h1>
-                  <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono font-bold">v1.7.0</span>
+                  <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono font-bold">v1.7.1</span>
                 </div>
                 <div className="flex items-center gap-2 relative">
                   <button onClick={handleOpenNotes} className="relative px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg text-xs transition shadow-sm flex items-center gap-1.5">
@@ -807,7 +805,6 @@
                   )}
                 </div>
 
-                {/* Shift Roster Card with Lightning Bolt in Bottom Right */}
                 <div className={`p-4 rounded-xl border relative shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-900'}`}>
                   <h4 className={`text-sm font-bold mb-3 ${darkMode ? 'text-slate-300' : 'text-slate-900'}`}>
                     {isOTActive ? '⚡ OT Mode Active (All Employees Available):' : `Shift ${activeShift} Roster (Tap to toggle absence):`}
@@ -838,7 +835,6 @@
                   )}
                 </div>
 
-                {/* 2-Column Grid Layout */}
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
                   {sortedBenches.map(bench => {
                     const isInactive = (currentShiftData.inactiveBenches || []).includes(bench.id);
@@ -1131,19 +1127,22 @@
                           {editBenches ? 'Done' : 'Edit'}
                         </button>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      <div className="space-y-3">
                         {sortedBenches.map(bench => (
-                          <div key={bench.id} className={`p-3.5 rounded-xl border flex flex-col justify-between gap-3 ${darkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-300 text-slate-900 shadow-xs'}`}>
-                            <div className="flex justify-between items-center">
+                          <div key={bench.id} className={`p-4 rounded-xl border flex justify-between items-center ${darkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-300 text-slate-900 shadow-xs'}`}>
+                            <div className="flex items-center gap-3">
                               <p className={`font-bold text-sm ${darkMode ? 'text-white' : 'text-slate-900'}`}>{bench.name}</p>
                               {editBenches && (
-                                <button onClick={() => handleDeleteBench(bench.id, bench.name)} className="w-8 h-8 rounded-lg bg-red-600 text-white font-extrabold flex items-center justify-center hover:bg-red-700 transition shadow-xs">×</button>
+                                <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 px-2 py-1 rounded-lg">
+                                  <button onClick={() => handleUpdateBenchDefaultCap(bench.id, bench.defaultCap || 1, -1)} className="w-4 h-4 bg-slate-700 hover:bg-slate-600 rounded text-white font-extrabold text-[10px] flex items-center justify-center">-</button>
+                                  <span className="text-xs font-extrabold text-blue-400 px-1">{bench.defaultCap || 1}</span>
+                                  <button onClick={() => handleUpdateBenchDefaultCap(bench.id, bench.defaultCap || 1, 1)} className="w-4 h-4 bg-slate-700 hover:bg-slate-600 rounded text-white font-extrabold text-[10px] flex items-center justify-center">+</button>
+                                </div>
                               )}
                             </div>
-                            <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-800">
-                              <span className="text-xs font-bold text-slate-400">Default Slots:</span>
-                              <input type="number" min="1" max="10" value={bench.defaultCap || 1} onChange={(e) => handleUpdateBenchField(bench.id, 'defaultCap', e.target.value)} className={`w-20 p-1.5 border rounded-lg text-xs font-bold ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-100 border-slate-300 text-slate-900'}`} />
-                            </div>
+                            {editBenches && (
+                              <button onClick={() => handleDeleteBench(bench.id, bench.name)} className="w-8 h-8 rounded-lg bg-red-600 text-white font-extrabold flex items-center justify-center hover:bg-red-700 transition shadow-xs">×</button>
+                            )}
                           </div>
                         ))}
                       </div>
