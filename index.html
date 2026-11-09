@@ -133,6 +133,7 @@
       const [newEmployeeClockNum, setNewEmployeeClockNum] = useState('');
       const [newEmployeeShift, setNewEmployeeShift] = useState('1');
       const [newBenchName, setNewBenchName] = useState('');
+      const [newBenchDefaultCap, setNewBenchDefaultCap] = useState('1');
       
       const [newUsernameInput, setNewUsernameInput] = useState('');
       const [newUserRole, setNewUserRole] = useState('supervisor'); 
@@ -178,7 +179,7 @@
 
         const unsubBenches = db.collection('benches').onSnapshot(snapshot => {
           const list = [];
-          snapshot.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
+          snapshot.forEach(doc => list.push({ id: doc.id, defaultCap: 1, ...doc.data() }));
           setBenches(list);
         });
 
@@ -435,9 +436,18 @@
         e.preventDefault();
         if (user?.role !== 'admin' || !newBenchName.trim()) return;
         const benchId = Date.now().toString();
-        const newBench = { id: benchId, name: newBenchName.trim() };
+        const cap = parseInt(newBenchDefaultCap, 10) || 1;
+        const newBench = { id: benchId, name: newBenchName.trim(), defaultCap: cap };
         await db.collection('benches').doc(benchId).set(newBench);
         setNewBenchName('');
+        setNewBenchDefaultCap('1');
+      };
+
+      const handleUpdateBenchField = async (id, field, value) => {
+        if (user?.role !== 'admin') return;
+        const updates = {};
+        updates[field] = field === 'defaultCap' ? Math.max(1, parseInt(value, 10) || 1) : value;
+        await db.collection('benches').doc(id).update(updates);
       };
 
       const handleDeleteBench = async (id, benchName) => {
@@ -506,12 +516,12 @@
         saveScheduleToFirestore(newData);
       };
 
-      const handleSlotChange = (benchId, delta) => {
+      const handleSlotChange = (benchId, delta, benchDefaultCap = 1) => {
         if (user?.role === 'observer' || scheduleLocked) return;
         const newData = { ...currentDayData };
         const shiftData = { ...currentShiftData };
         const overrides = { ...(shiftData.slotOverrides || {}) };
-        const current = overrides[benchId] || 1;
+        const current = overrides[benchId] !== undefined ? overrides[benchId] : benchDefaultCap;
         const next = Math.max(1, current + delta);
         overrides[benchId] = next;
         shiftData.slotOverrides = overrides;
@@ -613,7 +623,7 @@
 
         sortedBenches.forEach(bench => {
           if ((shiftData.inactiveBenches || []).includes(bench.id)) return;
-          const requiredSlots = shiftData.slotOverrides?.[bench.id] || 1;
+          const requiredSlots = shiftData.slotOverrides?.[bench.id] !== undefined ? shiftData.slotOverrides[bench.id] : (bench.defaultCap || 1);
 
           while ((assigned[bench.id] || []).length < requiredSlots && pool.length > 0) {
             let eligible = pool.filter(emp => {
@@ -828,12 +838,13 @@
                   )}
                 </div>
 
-                {/* 2-Column Grid Layout matching v1.6.9 structure */}
+                {/* 2-Column Grid Layout */}
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
                   {sortedBenches.map(bench => {
                     const isInactive = (currentShiftData.inactiveBenches || []).includes(bench.id);
                     const team = currentShiftData.benchTeams?.[bench.id] || [];
-                    const requiredSlots = currentShiftData.slotOverrides?.[bench.id] || 1;
+                    const defaultCap = bench.defaultCap || 1;
+                    const requiredSlots = currentShiftData.slotOverrides?.[bench.id] !== undefined ? currentShiftData.slotOverrides[bench.id] : defaultCap;
                     
                     const allAssignedOnShift = Object.values(currentShiftData.benchTeams || {}).flat();
                     const poolSource = isOTActive ? sortedEmployees : sortedEmployees.filter(e => e.shift === activeShift);
@@ -855,9 +866,9 @@
                               <h3 className={`font-bold text-xs md:text-base leading-tight truncate ${darkMode ? 'text-white' : 'text-slate-900'}`}>{bench.name}</h3>
                               {!scheduleLocked && !isInactive && (
                                 <div className="flex items-center gap-1 mt-1">
-                                  <button onClick={() => handleSlotChange(bench.id, -1)} className="w-4 h-4 bg-slate-700 hover:bg-slate-600 rounded text-white font-extrabold text-[10px] flex items-center justify-center">-</button>
+                                  <button onClick={() => handleSlotChange(bench.id, -1, defaultCap)} className="w-4 h-4 bg-slate-700 hover:bg-slate-600 rounded text-white font-extrabold text-[10px] flex items-center justify-center">-</button>
                                   <span className="text-[10px] font-extrabold text-blue-400 px-0.5">{requiredSlots}</span>
-                                  <button onClick={() => handleSlotChange(bench.id, 1)} className="w-4 h-4 bg-slate-700 hover:bg-slate-600 rounded text-white font-extrabold text-[10px] flex items-center justify-center">+</button>
+                                  <button onClick={() => handleSlotChange(bench.id, 1, defaultCap)} className="w-4 h-4 bg-slate-700 hover:bg-slate-600 rounded text-white font-extrabold text-[10px] flex items-center justify-center">+</button>
                                 </div>
                               )}
                             </div>
@@ -1103,8 +1114,12 @@
                   <div className="space-y-6">
                     <div className={`p-5 rounded-xl border ${darkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'}`}>
                       <h3 className={`font-bold text-base mb-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>Add Bench</h3>
-                      <form onSubmit={handleAddBench} className="flex gap-2">
+                      <form onSubmit={handleAddBench} className="flex gap-2 flex-wrap md:flex-nowrap">
                         <input type="text" placeholder="Bench name..." value={newBenchName} onChange={(e) => setNewBenchName(e.target.value)} className={`flex-1 p-2.5 border rounded-lg text-sm font-semibold ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-400 text-slate-900'}`} />
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-400">Default Slots:</span>
+                          <input type="number" min="1" max="10" value={newBenchDefaultCap} onChange={(e) => setNewBenchDefaultCap(e.target.value)} className={`w-20 p-2.5 border rounded-lg text-sm font-semibold ${darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-400 text-slate-900'}`} />
+                        </div>
                         <button type="submit" className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold transition shadow-xs">+ Add Bench</button>
                       </form>
                     </div>
@@ -1118,11 +1133,17 @@
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                         {sortedBenches.map(bench => (
-                          <div key={bench.id} className={`p-3.5 rounded-xl border flex justify-between items-center ${darkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-300 text-slate-900 shadow-xs'}`}>
-                            <p className={`font-bold text-sm ${darkMode ? 'text-white' : 'text-slate-900'}`}>{bench.name}</p>
-                            {editBenches && (
-                              <button onClick={() => handleDeleteBench(bench.id, bench.name)} className="w-8 h-8 rounded-lg bg-red-600 text-white font-extrabold flex items-center justify-center hover:bg-red-700 transition shadow-xs">×</button>
-                            )}
+                          <div key={bench.id} className={`p-3.5 rounded-xl border flex flex-col justify-between gap-3 ${darkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-300 text-slate-900 shadow-xs'}`}>
+                            <div className="flex justify-between items-center">
+                              <p className={`font-bold text-sm ${darkMode ? 'text-white' : 'text-slate-900'}`}>{bench.name}</p>
+                              {editBenches && (
+                                <button onClick={() => handleDeleteBench(bench.id, bench.name)} className="w-8 h-8 rounded-lg bg-red-600 text-white font-extrabold flex items-center justify-center hover:bg-red-700 transition shadow-xs">×</button>
+                              )}
+                            </div>
+                            <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-800">
+                              <span className="text-xs font-bold text-slate-400">Default Slots:</span>
+                              <input type="number" min="1" max="10" value={bench.defaultCap || 1} onChange={(e) => handleUpdateBenchField(bench.id, 'defaultCap', e.target.value)} className={`w-20 p-1.5 border rounded-lg text-xs font-bold ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-100 border-slate-300 text-slate-900'}`} />
+                            </div>
                           </div>
                         ))}
                       </div>
